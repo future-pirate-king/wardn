@@ -1,0 +1,70 @@
+---
+title: Getting Started
+description: Install Wardn and deploy your first application
+---
+
+import { Steps } from "fumadocs-ui/components/steps";
+import { Callout } from "fumadocs-ui/components/callout";
+import { CodeBlock } from "fumadocs-ui/components/codeblock";
+
+# Getting Started
+
+## Prerequisites
+
+- Kubernetes cluster (1.28+)
+- `kubectl` installed and configured
+- Git repository with your application manifests
+
+## Installation
+
+<Steps>
+
+### Install the Wardn Operator
+
+Apply the Wardn operator manifest to your cluster:
+
+```bash
+kubectl apply -f https://github.com/wardn/wardn/releases/latest/download/operator.yaml
+```
+
+### Verify Installation
+
+Check that the operator is running:
+
+```bash
+kubectl get pods -n wardn-system
+```
+
+### Create a GitApplication
+
+Create your first `GitApplication` custom resource:
+
+```yaml
+apiVersion: wardn.io/v1alpha1
+kind: GitApplication
+metadata:
+  name: my-app
+  namespace: default
+spec:
+  repoURL: https://github.com/myorg/my-app
+  path: manifests
+  targetRevision: main
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
+
+### Apply and Watch
+
+```bash
+kubectl apply -f gitapplication.yaml
+kubectl get gitapplication my-app -w
+```
+
+</Steps>
+
+## Next Steps
+
+- [Configuration](/docs/configuration) — Explore advanced sync policies and health checks
+- [CLI Reference](/docs/cli) — Install the `wardn` CLI for managing applications

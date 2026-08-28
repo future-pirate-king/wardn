@@ -1,0 +1,77 @@
+---
+title: CLI Reference
+description: Wardn CLI commands and usage
+---
+
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+
+# CLI Reference
+
+## Installation
+
+```bash
+curl -sL https://github.com/wardn/wardn/releases/latest/download/wardn-linux-amd64 -o /usr/local/bin/wardn
+chmod +x /usr/local/bin/wardn
+```
+
+## Commands
+
+### `wardn app list`
+
+List all GitApplications across namespaces.
+
+```bash
+wardn app list
+wardn app list -n production
+```
+
+### `wardn app sync`
+
+Trigger a manual sync for a GitApplication.
+
+```bash
+wardn app sync my-app
+wardn app sync my-app --dry-run
+```
+
+### `wardn app diff`
+
+Show the diff between Git and cluster state.
+
+```bash
+wardn app diff my-app
+```
+
+### `wardn app history`
+
+View sync history for an application.
+
+```bash
+wardn app history my-app
+wardn app history my-app --revision 5
+```
+
+### `wardn app rollback`
+
+Rollback to a previous sync revision.
+
+```bash
+wardn app rollback my-app --revision 3
+```
+
+### `wardn cluster add`
+
+Register a remote cluster for multi-cluster management.
+
+```bash
+wardn cluster add --name staging --kubeconfig ~/.kube/staging
+```
+
+## Global Flags
+
+| Flag | Description |
+|------|-------------|
+| `--kubeconfig` | Path to kubeconfig file |
+| `-n, --namespace` | Namespace scope |
+| `--context` | Kubernetes context to use |
+| `-o, --output` | Output format (table, json, yaml) |

@@ -1,0 +1,73 @@
+---
+title: Configuration
+description: GitApplication CRD spec and sync policies
+---
+
+import { Steps } from "fumadocs-ui/components/steps";
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+
+# Configuration
+
+## GitApplication Spec
+
+The `GitApplication` custom resource defines a deployment source and sync policy.
+
+### Core Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `repoURL` | string | Git repository URL |
+| `path` | string | Path within repo to manifests |
+| `targetRevision` | string | Branch, tag, or commit SHA |
+| `syncPolicy` | object | Sync automation settings |
+
+### Example
+
+```yaml
+apiVersion: wardn.io/v1alpha1
+kind: GitApplication
+metadata:
+  name: production-app
+  namespace: default
+spec:
+  repoURL: https://github.com/myorg/my-app
+  path: k8s/overlays/production
+  targetRevision: main
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    healthChecks:
+      - kind: Deployment
+        name: api
+        checkType: readiness
+```
+
+## Sync Policies
+
+### Automated Sync
+
+When `automated` is enabled, Wardn continuously reconciles the cluster state with Git.
+
+- **`prune`**: Removes resources that are no longer in Git
+- **`selfHeal`**: Reapplies changes if someone manually edits cluster resources
+
+### Manual Sync
+
+Omit the `automated` field to require manual sync triggers via CLI or UI.
+
+## Health Checks
+
+Configure health probes to determine if a sync was successful:
+
+```yaml
+syncPolicy:
+  healthChecks:
+    - kind: Deployment
+      name: api-server
+      checkType: readiness
+    - kind: Job
+      name: migration
+      checkType: completion
+```
