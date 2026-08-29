@@ -1,0 +1,147 @@
+---
+title: Server
+description: Wardn API server — architecture, configuration, and API reference
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+
+# Server
+
+The Wardn server is the central API layer. It handles authentication, RBAC, cluster management, sync orchestration, and real-time updates to the frontend.
+
+## Overview
+
+The server is a Go binary built with the `chi` router. It connects to Postgres for persistent state and Redis for caching, sessions, and pub/sub.
+
+| Component | Technology |
+|-----------|-----------|
+| Router | `chi/v5` |
+| Database | Postgres 18 (`jackc/pgx/v5`) |
+| Cache | Redis 8 (`redis/go-redis/v9`) |
+| Auth | Local users (bcrypt) + OIDC (`coreos/go-oidc/v3`) |
+| Sessions | Redis-backed with 24h TTL |
+
+## Configuration
+
+All configuration is via environment variables.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HTTP_ADDR` | `:8080` | HTTP listen address |
+| `POSTGRES_URL` | `postgres://wardn:wardn@localhost:5432/wardn?sslmode=disable` | Postgres connection string |
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection string |
+| `JWT_SECRET` | — | **Required.** Secret for signing session tokens |
+| `OIDC_PROVIDER_URL` | — | OIDC provider URL (optional) |
+| `OIDC_CLIENT_ID` | — | OIDC client ID (optional) |
+| `OIDC_CLIENT_SECRET` | — | OIDC client secret (optional) |
+| `OPERATOR_ADDR` | `localhost:8081` | Operator gRPC address |
+
+<Callout type="warn">
+  `JWT_SECRET` must be set to a strong random value in production.
+</Callout>
+
+## API Endpoints
+
+### Health
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/health` | Health check |
+
+### Authentication
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/auth/register` | Register a new user |
+| `POST` | `/api/v1/auth/login` | Login and create session |
+| `POST` | `/api/v1/auth/logout` | Destroy session |
+| `GET` | `/api/v1/auth/me` | Get current user (requires auth) |
+
+### Applications
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/apps` | List all GitApplications |
+| `GET` | `/api/v1/apps/{namespace}/{name}` | Get a specific application |
+| `POST` | `/api/v1/apps/{namespace}/{name}/sync` | Trigger manual sync |
+| `GET` | `/api/v1/apps/{namespace}/{name}/history` | Get sync history |
+
+### Projects
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/projects` | List projects |
+| `POST` | `/api/v1/projects` | Create a project |
+| `GET` | `/api/v1/projects/{id}` | Get a project |
+
+### Clusters
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/clusters` | List registered clusters |
+| `POST` | `/api/v1/clusters` | Register a new cluster |
+
+### Audit
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/audit` | List audit log entries |
+
+## RBAC
+
+Wardn uses project-scoped RBAC with three roles:
+
+| Role | Permissions |
+|------|------------|
+| `read` | View apps, sync status, health |
+| `sync` | All read permissions + trigger syncs |
+| `admin` | All sync permissions + manage project members, delete apps |
+
+Roles are stored in the `project_users` table and enforced via middleware on every API request.
+
+## Running Locally
+
+<Tabs>
+  <Tab value="docker-compose" label="Docker Compose">
+
+  ```bash
+  docker compose up -d
+  ```
+
+  This starts Postgres, Redis, server, operator, and all frontend apps.
+
+  </Tab>
+  <Tab value="manual" label="Manual">
+
+  ```bash
+  # Start Postgres and Redis
+  docker run -d --name wardn-pg -p 5432:5432 \
+    -e POSTGRES_USER=wardn -e POSTGRES_PASSWORD=wardn -e POSTGRES_DB=wardn \
+    postgres:18-alpine
+
+  docker run -d --name wardn-redis -p 6379:6379 redis:8-alpine
+
+  # Start the server
+  cd server
+  export JWT_SECRET="dev-secret"
+  export POSTGRES_URL="postgres://wardn:wardn@localhost:5432/wardn?sslmode=disable"
+  export REDIS_URL="redis://localhost:6379/0"
+  go run ./cmd/server
+  ```
+
+  </Tab>
+</Tabs>
+
+## Database Schema
+
+The server auto-migrates on startup. Core tables:
+
+- **`users`** — local user accounts with bcrypt-hashed passwords
+- **`projects`** — logical grouping with RBAC boundary
+- **`project_users`** — maps users to projects with roles
+- **`clusters`** — registered Kubernetes clusters
+- **`repo_creds`** — git repository credentials
+- **`secret_stores`** — SOPS, ESO, and Vault integration configs
+- **`sync_history`** — revision tracking for rollback
+- **`audit_log`** — who did what, when
