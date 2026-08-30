@@ -35,7 +35,6 @@ const data = {
           title: "Overview",
           url: "/",
           icon: <LayoutDashboardIcon />,
-          isActive: true,
         },
         {
           title: "Deployments",
