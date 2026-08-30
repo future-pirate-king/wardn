@@ -11,7 +11,10 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/tabs"
 import { SyncStatusBadge, HealthStatusBadge } from "@/components/status-badge"
-import { DonutChart, DonutLegend, BarList, Sparkline } from "@/components/charts"
+import { ProgressTrack, ProgressIndicator } from "@/components/ui/progress"
+import { Progress as ProgressPrimitive } from "@base-ui/react/progress"
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
+import { PieChart, Pie, Cell, Label, AreaChart, Area, XAxis, YAxis } from "recharts"
 import {
   mockClusters,
   mockRecentActivity,
@@ -82,11 +85,134 @@ function formatRelativeTime(dateStr: string): string {
   return `${diffHr}h ago`
 }
 
+function usageColor(v: number) {
+  return v > 80 ? "#ef4444" : v > 60 ? "#eab308" : "#22c55e"
+}
+
 const mockSyncHistory = [8, 9, 7, 10, 9, 11, 10, 12, 11, 13, 12, 14]
 const mockHealthHistory = [10, 9, 10, 8, 9, 10, 11, 10, 9, 10, 11, 10]
 
-function usageColor(v: number) {
-  return v > 80 ? "#ef4444" : v > 60 ? "#eab308" : "#22c55e"
+function DonutCard({
+  title,
+  icon,
+  segments,
+  centerLabel,
+  centerSub,
+  sparkData,
+  sparkColor,
+  chartConfig,
+}: {
+  title: string
+  icon: React.ReactNode
+  segments: { label: string; value: number; color: string }[]
+  centerLabel: string
+  centerSub: string
+  sparkData: number[]
+  sparkColor: string
+  chartConfig: ChartConfig
+}) {
+  const total = segments.reduce((sum, s) => sum + s.value, 0) || 1
+  const pieData = segments.map((s) => ({ name: s.label, value: s.value, fill: s.color }))
+  const lineData = sparkData.map((v, i) => ({ day: i, value: v }))
+  const sparkConfig: ChartConfig = { value: { label: "Count", color: sparkColor } }
+  const gradientId = React.useId().replace(/:/g, "")
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          {icon}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
+          <ChartContainer
+            config={chartConfig}
+            className="aspect-square w-[120px] shrink-0"
+            initialDimension={{ width: 120, height: 120 }}
+          >
+            <PieChart>
+              <ChartTooltip content={<ChartTooltipContent nameKey="name" hideLabel />} />
+              <Pie
+                data={pieData}
+                dataKey="value"
+                nameKey="name"
+                innerRadius={38}
+                outerRadius={48}
+                strokeWidth={1}
+                paddingAngle={2}
+                cornerRadius={4}
+              >
+                {pieData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                ))}
+                <Label
+                  content={({ viewBox }) => {
+                    if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                      return (
+                        <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
+                          <tspan x={viewBox.cx} y={viewBox.cy - 6} className="fill-foreground text-lg font-semibold">
+                            {centerLabel}
+                          </tspan>
+                          <tspan x={viewBox.cx} y={viewBox.cy + 10} className="fill-muted-foreground text-xs">
+                            {centerSub}
+                          </tspan>
+                        </text>
+                      )
+                    }
+                    return null
+                  }}
+                />
+              </Pie>
+            </PieChart>
+          </ChartContainer>
+          <div className="flex-1 min-w-0 w-full sm:w-auto">
+            <div className="flex flex-col gap-2">
+              {segments.map((seg) => (
+                <div key={seg.label} className="flex items-center gap-2 text-sm">
+                  <span className="size-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+                  <span className="text-muted-foreground flex-1">{seg.label}</span>
+                  <span className="font-medium">{seg.value}</span>
+                  <span className="text-xs text-muted-foreground w-8 text-right">
+                    {Math.round((seg.value / total) * 100)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+          <ActivityIcon className="size-3" />
+          <span>Last 7 days</span>
+          <ChartContainer
+            config={sparkConfig}
+            className="ml-auto h-[20px] w-[80px] !aspect-auto"
+            initialDimension={{ width: 80, height: 20 }}
+          >
+            <AreaChart data={lineData} margin={{ top: 0, bottom: 0, left: 0, right: 0 }}>
+              <defs>
+                <linearGradient id={`sparkGradient-${gradientId}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--color-value)" stopOpacity={0.5} />
+                  <stop offset="100%" stopColor="var(--color-value)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="day" hide />
+              <YAxis hide domain={["dataMin", "dataMax"]} />
+              <Area
+                dataKey="value"
+                stroke="var(--color-value)"
+                strokeWidth={1.5}
+                fill={`url(#sparkGradient-${gradientId})`}
+                dot={false}
+                type="monotone"
+              />
+            </AreaChart>
+          </ChartContainer>
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
 
 export default function Home() {
@@ -125,6 +251,21 @@ export default function Home() {
     color: usageColor(c.memoryUsage),
   }))
 
+  const syncChartConfig: ChartConfig = {
+    Synced: { label: "Synced", color: syncColors.Synced },
+    OutOfSync: { label: "OutOfSync", color: syncColors.OutOfSync },
+    Syncing: { label: "Syncing", color: syncColors.Syncing },
+    Unknown: { label: "Unknown", color: syncColors.Unknown },
+  }
+
+  const healthChartConfig: ChartConfig = {
+    Healthy: { label: "Healthy", color: healthColors.Healthy },
+    Degraded: { label: "Degraded", color: healthColors.Degraded },
+    Progressing: { label: "Progressing", color: healthColors.Progressing },
+    Missing: { label: "Missing", color: healthColors.Missing },
+    Unknown: { label: "Unknown", color: healthColors.Unknown },
+  }
+
   const needsAttention = mockDeployments
     .filter((d) => d.syncStatus === "OutOfSync" || d.healthStatus === "Degraded" || d.healthStatus === "Missing")
     .slice(0, 5)
@@ -146,61 +287,27 @@ export default function Home() {
         <div className="flex flex-1 flex-col gap-4 p-4">
           {/* Charts row */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {/* Sync status donut */}
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium">Sync Status</CardTitle>
-                  <RefreshCcwIcon className="size-4 text-muted-foreground" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
-                  <DonutChart
-                    segments={syncSegments}
-                    size={100}
-                    centerLabel={String(totalDeployments)}
-                    centerSub="total"
-                  />
-                  <div className="flex-1 min-w-0 w-full sm:w-auto">
-                    <DonutLegend segments={syncSegments} />
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
-                  <ActivityIcon className="size-3" />
-                  <span>Last 7 days</span>
-                  <Sparkline data={mockSyncHistory} width={80} height={20} className="text-blue-500 ml-auto" />
-                </div>
-              </CardContent>
-            </Card>
+            <DonutCard
+              title="Sync Status"
+              icon={<RefreshCcwIcon className="size-4 text-muted-foreground" />}
+              segments={syncSegments}
+              centerLabel={String(totalDeployments)}
+              centerSub="total"
+              sparkData={mockSyncHistory}
+              sparkColor="#3b82f6"
+              chartConfig={syncChartConfig}
+            />
 
-            {/* Health status donut */}
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium">Health Status</CardTitle>
-                  <TrendingUpIcon className="size-4 text-muted-foreground" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
-                  <DonutChart
-                    segments={healthSegments}
-                    size={100}
-                    centerLabel={String(healthyDeployments)}
-                    centerSub="healthy"
-                  />
-                  <div className="flex-1 min-w-0 w-full sm:w-auto">
-                    <DonutLegend segments={healthSegments} />
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
-                  <ActivityIcon className="size-3" />
-                  <span>Last 7 days</span>
-                  <Sparkline data={mockHealthHistory} width={80} height={20} className="text-green-500 ml-auto" />
-                </div>
-              </CardContent>
-            </Card>
+            <DonutCard
+              title="Health Status"
+              icon={<TrendingUpIcon className="size-4 text-muted-foreground" />}
+              segments={healthSegments}
+              centerLabel={String(healthyDeployments)}
+              centerSub="healthy"
+              sparkData={mockHealthHistory}
+              sparkColor="#22c55e"
+              chartConfig={healthChartConfig}
+            />
 
             {/* Resource utilization with CPU/Memory tabs */}
             <Card>
@@ -222,7 +329,24 @@ export default function Home() {
                 </div>
               </CardHeader>
               <CardContent>
-                <BarList items={resourceTab === "cpu" ? cpuItems : memoryItems} className="mt-1" />
+                <div className="flex flex-col gap-3 mt-1">
+                  {(resourceTab === "cpu" ? cpuItems : memoryItems).map((item) => (
+                    <div key={item.label} className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="truncate">{item.label}</span>
+                        <span className="text-muted-foreground text-xs shrink-0 ml-2">{item.sub}</span>
+                      </div>
+                      <ProgressPrimitive.Root value={item.value} max={item.max} data-slot="progress" className="flex flex-wrap gap-0">
+                        <ProgressTrack className="h-2">
+                          <ProgressIndicator
+                            className="rounded-full transition-all duration-500"
+                            style={{ backgroundColor: item.color }}
+                          />
+                        </ProgressTrack>
+                      </ProgressPrimitive.Root>
+                    </div>
+                  ))}
+                </div>
                 <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1.5">
                     <span className="size-2 rounded-full bg-green-500" /> Normal
