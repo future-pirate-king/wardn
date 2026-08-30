@@ -176,7 +176,7 @@ export function DeploymentView() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 rounded-xl bg-card p-3 dark:ring-1 dark:ring-foreground/10 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-xl bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 max-w-md">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
@@ -237,7 +237,7 @@ export function DeploymentView() {
 
       {
         filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 rounded-xl bg-card dark:ring-1 dark:ring-foreground/10 gap-2">
+          <div className="flex flex-col items-center justify-center h-64 rounded-xl bg-card gap-2">
             <p className="text-sm text-muted-foreground">No deployments match your filters</p>
             {(activeFilterCount > 0 || search) && (
               <Button variant="outline" size="sm" onClick={() => { clearAllFilters(); setSearch("") }}>

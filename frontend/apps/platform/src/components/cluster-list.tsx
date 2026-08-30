@@ -71,7 +71,7 @@ interface ClusterListProps {
 
 export function ClusterList({ clusters, sortField, sortDirection, onSort }: ClusterListProps) {
   return (
-    <div className="rounded-xl bg-card dark:ring-1 dark:ring-foreground/10 overflow-hidden">
+    <div className="rounded-xl bg-card overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
