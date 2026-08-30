@@ -1,96 +1,56 @@
-import { RocketIcon, CodeIcon, ServerIcon, GitBranchIcon, CheckCircleIcon } from "lucide-react";
-import { Button } from "@repo/ui/button";
+import { AppSidebar } from "@/components/app-sidebar";
+import { Separator } from "@/components/ui/separator";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 
-const apps = [
-  { name: "api-gateway", branch: "main", status: "healthy", lastDeploy: "2 hours ago" },
-  { name: "web-frontend", branch: "main", status: "healthy", lastDeploy: "5 hours ago" },
-  { name: "worker-service", branch: "staging", status: "syncing", lastDeploy: "1 day ago" },
-];
+const stats = {
+  clusters: 3,
+  deployments: 12,
+  healthy: 10,
+  syncing: 2,
+};
 
 export default function Home() {
   return (
-    <div className="flex min-h-svh flex-col">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-border">
-        <div className="flex items-center gap-2 font-medium">
-          <RocketIcon className="size-5" />
-          Wardn Platform
-        </div>
-        <nav className="flex items-center gap-4 text-sm text-muted-foreground">
-          <a href="https://wardn.space" className="hover:text-foreground transition-colors">Home</a>
-          <a href="https://docs.wardn.space" className="hover:text-foreground transition-colors">Docs</a>
-          <a href="https://github.com/wardn/wardn" className="hover:text-foreground transition-colors">
-            <CodeIcon className="size-4" />
-          </a>
-        </nav>
-      </header>
-
-      <main className="flex flex-1 flex-col px-6 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-            <p className="text-sm text-muted-foreground">Monitor your GitOps deployments</p>
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2 bg-card border-b border-border transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+          <div className="flex items-center gap-2 px-4">
+            <SidebarTrigger className="-ml-1" />
+            <Separator
+              orientation="vertical"
+              className="mr-2 data-vertical:h-4 data-vertical:self-auto"
+            />
+            <h1 className="text-base font-medium">Overview</h1>
           </div>
-          <Button size="lg">New Application</Button>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-3 mb-8">
-          <div className="rounded-4xl bg-card p-6 shadow-md ring-1 ring-foreground/5">
-            <div className="flex items-center gap-2 mb-2">
-              <ServerIcon className="size-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Applications</span>
-            </div>
-            <p className="text-3xl font-bold">{apps.length}</p>
-          </div>
-          <div className="rounded-4xl bg-card p-6 shadow-md ring-1 ring-foreground/5">
-            <div className="flex items-center gap-2 mb-2">
-              <CheckCircleIcon className="size-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Healthy</span>
-            </div>
-            <p className="text-3xl font-bold">{apps.filter((a) => a.status === "healthy").length}</p>
-          </div>
-          <div className="rounded-4xl bg-card p-6 shadow-md ring-1 ring-foreground/5">
-            <div className="flex items-center gap-2 mb-2">
-              <GitBranchIcon className="size-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Syncing</span>
-            </div>
-            <p className="text-3xl font-bold">{apps.filter((a) => a.status === "syncing").length}</p>
-          </div>
-        </div>
-
-        <div className="rounded-4xl bg-card shadow-md ring-1 ring-foreground/5 overflow-hidden">
-          <div className="px-6 py-4 border-b border-border">
-            <h2 className="font-heading text-base font-medium">Applications</h2>
-          </div>
-          <div className="divide-y divide-border">
-            {apps.map((app) => (
-              <div key={app.name} className="flex items-center justify-between px-6 py-4">
-                <div className="flex items-center gap-3">
-                  <ServerIcon className="size-4 text-muted-foreground" />
-                  <div>
-                    <p className="font-medium">{app.name}</p>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <GitBranchIcon className="size-3" />
-                      {app.branch}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-sm text-muted-foreground">{app.lastDeploy}</span>
-                  <span
-                    className={
-                      app.status === "healthy"
-                        ? "text-sm font-medium text-green-600 dark:text-green-400"
-                        : "text-sm font-medium text-yellow-600 dark:text-yellow-400"
-                    }
-                  >
-                    {app.status}
-                  </span>
-                </div>
+        </header>
+        <div className="flex flex-1 flex-col gap-4 p-4">
+          <div className="rounded-xl bg-card p-6 dark:ring-1 dark:ring-foreground/10">
+            <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Clusters</p>
+                <p className="text-2xl font-semibold mt-1">{stats.clusters}</p>
               </div>
-            ))}
+              <div>
+                <p className="text-sm text-muted-foreground">Deployments</p>
+                <p className="text-2xl font-semibold mt-1">{stats.deployments}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Healthy</p>
+                <p className="text-2xl font-semibold mt-1 text-green-600 dark:text-green-400">{stats.healthy}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Syncing</p>
+                <p className="text-2xl font-semibold mt-1 text-yellow-600 dark:text-yellow-400">{stats.syncing}</p>
+              </div>
+            </div>
           </div>
         </div>
-      </main>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
