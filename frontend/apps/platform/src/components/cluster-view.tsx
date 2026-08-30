@@ -21,6 +21,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/tabs"
 import { ClusterCard } from "@/components/cluster-card"
 import { ClusterList } from "@/components/cluster-list"
+import { NumberedPagination } from "@/components/numbered-pagination"
 import {
   mockClusters,
   clusterStatuses,
@@ -57,7 +58,6 @@ const sortFieldLabels: Record<ClusterSortField, string> = {
 
 const statusOrder: Record<string, number> = { Connected: 0, Unknown: 1, Error: 2, Disconnected: 3 }
 
-const pageSizeOptions = [10, 20, 50]
 
 export function ClusterView() {
   const [viewMode, setViewMode] = React.useState<ClusterViewMode>("card")
@@ -231,7 +231,7 @@ export function ClusterView() {
       )}
 
       {filtered.length > 0 && (
-        <Pagination
+        <NumberedPagination
           page={currentPage}
           totalPages={totalPages}
           pageSize={pageSize}
@@ -439,77 +439,5 @@ function ClusterSortDrawer({
         </div>
       </DrawerContent>
     </Drawer>
-  )
-}
-
-function Pagination({
-  page,
-  totalPages,
-  pageSize,
-  totalItems,
-  onPageChange,
-  onPageSizeChange,
-}: {
-  page: number
-  totalPages: number
-  pageSize: number
-  totalItems: number
-  onPageChange: (page: number) => void
-  onPageSizeChange: (size: number) => void
-}) {
-  const start = page * pageSize + 1
-  const end = Math.min((page + 1) * pageSize, totalItems)
-
-  return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-        <span>
-          Showing {start}–{end} of {totalItems}
-        </span>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button variant="ghost" size="xs">
-                {pageSize} / page
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="start" className="w-32">
-            <DropdownMenuRadioGroup
-              value={String(pageSize)}
-              onValueChange={(val) => onPageSizeChange(Number(val))}
-            >
-              {pageSizeOptions.map((size) => (
-                <DropdownMenuRadioItem key={size} value={String(size)}>
-                  {size} / page
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="icon-sm"
-          onClick={() => onPageChange(Math.max(0, page - 1))}
-          disabled={page === 0}
-        >
-          <ChevronLeftIcon className="size-4" />
-        </Button>
-        <span className="text-xs text-muted-foreground">
-          Page {page + 1} of {totalPages}
-        </span>
-        <Button
-          variant="outline"
-          size="icon-sm"
-          onClick={() => onPageChange(Math.min(totalPages - 1, page + 1))}
-          disabled={page >= totalPages - 1}
-        >
-          <ChevronRightIcon className="size-4" />
-        </Button>
-      </div>
-    </div>
   )
 }
