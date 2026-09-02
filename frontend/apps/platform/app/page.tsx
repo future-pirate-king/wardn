@@ -2,18 +2,18 @@
 
 import * as React from "react"
 import { AppSidebar } from "@/components/app-sidebar"
-import { Separator } from "@/components/ui/separator"
+import { Separator } from "@repo/ui/separator"
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
-} from "@/components/ui/sidebar"
+} from "@repo/ui/sidebar"
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/tabs"
 import { SyncStatusBadge, HealthStatusBadge } from "@/components/status-badge"
-import { ProgressTrack, ProgressIndicator } from "@/components/ui/progress"
+import { ProgressTrack, ProgressIndicator } from "@repo/ui/progress"
 import { Progress as ProgressPrimitive } from "@base-ui/react/progress"
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@repo/ui/chart"
 import { PieChart, Pie, Cell, Label, AreaChart, Area, XAxis, YAxis } from "recharts"
 import {
   mockClusters,
@@ -118,7 +118,7 @@ function DonutCard({
   const gradientId = React.useId().replace(/:/g, "")
 
   return (
-    <Card>
+    <Card className="hover:shadow-none hover:border-border">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-medium">{title}</CardTitle>
@@ -274,7 +274,7 @@ export default function Home() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 bg-sidebar border-b border-border transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+        <header className="flex h-16 shrink-0 items-center gap-2">
           <div className="flex items-center gap-2 px-4">
             <SidebarTrigger className="-ml-1" />
             <Separator
@@ -284,7 +284,7 @@ export default function Home() {
             <h1 className="text-base font-medium">Overview</h1>
           </div>
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4">
+        <div className="flex flex-1 flex-col gap-4 p-4 rounded-tl-2xl bg-background border-l border-t border-border">
           {/* Charts row */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             <DonutCard
@@ -310,7 +310,7 @@ export default function Home() {
             />
 
             {/* Resource utilization with CPU/Memory tabs */}
-            <Card>
+            <Card className="hover:shadow-none hover:border-border">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-medium">Cluster Resources</CardTitle>
@@ -365,7 +365,7 @@ export default function Home() {
           {/* Bottom row: recent activity + needs attention */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {/* Recent activity */}
-            <Card>
+            <Card className="hover:shadow-none hover:border-border">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-medium">Recent Activity</CardTitle>
@@ -394,7 +394,7 @@ export default function Home() {
             </Card>
 
             {/* Needs attention */}
-            <Card>
+            <Card className="hover:shadow-none hover:border-border">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-medium">Needs Attention</CardTitle>

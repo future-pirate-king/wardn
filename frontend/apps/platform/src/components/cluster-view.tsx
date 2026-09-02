@@ -1,15 +1,15 @@
 "use client"
 
 import * as React from "react"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
+import { Input } from "@repo/ui/input"
+import { Button } from "@repo/ui/button"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-} from "@/components/ui/dropdown-menu"
+} from "@repo/ui/dropdown-menu"
 import {
   Drawer,
   DrawerContent,
@@ -17,7 +17,7 @@ import {
   DrawerTitle,
   DrawerDescription,
   DrawerFooter,
-} from "@/components/ui/drawer"
+} from "@repo/ui/drawer"
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/tabs"
 import { ClusterCard } from "@/components/cluster-card"
 import { ClusterList } from "@/components/cluster-list"
@@ -147,7 +147,7 @@ export function ClusterView() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 rounded-xl bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-xl p-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 max-w-md">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input

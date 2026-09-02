@@ -9,17 +9,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@repo/ui/dialog"
-import { Button } from "@/components/ui/button"
+import { Button } from "@repo/ui/button"
 import {
   SidebarMenu,
   SidebarMenuItem,
   useSidebar,
-} from "@/components/ui/sidebar"
+} from "@repo/ui/sidebar"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip"
+} from "@repo/ui/tooltip"
 import {
   PlusIcon,
   ServerIcon,

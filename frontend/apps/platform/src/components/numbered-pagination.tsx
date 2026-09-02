@@ -1,14 +1,14 @@
 "use client"
 
 import * as React from "react"
-import { Button } from "@/components/ui/button"
+import { Button } from "@repo/ui/button"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-} from "@/components/ui/dropdown-menu"
+} from "@repo/ui/dropdown-menu"
 import {
   Pagination as UiPagination,
   PaginationContent,
@@ -17,7 +17,7 @@ import {
   PaginationPrevious,
   PaginationNext,
   PaginationEllipsis,
-} from "@/components/ui/pagination"
+} from "@repo/ui/pagination"
 
 const pageSizeOptions = [10, 20, 50]
 

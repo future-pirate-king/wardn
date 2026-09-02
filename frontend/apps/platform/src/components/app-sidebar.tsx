@@ -11,7 +11,7 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
-} from "@/components/ui/sidebar"
+} from "@repo/ui/sidebar"
 import {
   LayoutDashboardIcon,
   LayersIcon,

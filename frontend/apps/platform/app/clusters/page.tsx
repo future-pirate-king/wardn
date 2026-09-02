@@ -1,10 +1,10 @@
 import { AppSidebar } from "@/components/app-sidebar"
-import { Separator } from "@/components/ui/separator"
+import { Separator } from "@repo/ui/separator"
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
-} from "@/components/ui/sidebar"
+} from "@repo/ui/sidebar"
 import { ClusterView } from "@/components/cluster-view"
 
 export default function ClustersPage() {
@@ -12,7 +12,7 @@ export default function ClustersPage() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 bg-sidebar border-b border-border transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+        <header className="flex h-16 shrink-0 items-center gap-2">
           <div className="flex items-center gap-2 px-4">
             <SidebarTrigger className="-ml-1" />
             <Separator
@@ -22,7 +22,7 @@ export default function ClustersPage() {
             <h1 className="text-base font-medium">Clusters</h1>
           </div>
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4">
+        <div className="flex flex-1 flex-col gap-4 p-4 rounded-tl-2xl bg-background border-l border-t border-border">
           <ClusterView />
         </div>
       </SidebarInset>
