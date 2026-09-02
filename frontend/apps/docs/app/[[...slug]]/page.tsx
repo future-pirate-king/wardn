@@ -4,7 +4,7 @@ import {
   DocsDescription,
   DocsPage,
   DocsTitle,
-} from "fumadocs-ui/page";
+} from "@/layouts/notebook/page";
 import { notFound } from "next/navigation";
 import { getMDXComponents } from "@/mdx-components";
 
