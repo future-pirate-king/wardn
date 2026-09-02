@@ -66,25 +66,30 @@ export function NumberedPagination({
   const start = page * pageSize + 1
   const end = Math.min((page + 1) * pageSize, totalItems)
   const pageRange = getPageRange(page, totalPages)
+  const [pageSizeOpen, setPageSizeOpen] = React.useState(false)
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-3 text-sm text-muted-foreground">
         <span>
           Showing {start}–{end} of {totalItems}
         </span>
-        <DropdownMenu>
+        <DropdownMenu open={pageSizeOpen} onOpenChange={setPageSizeOpen}>
           <DropdownMenuTrigger
             render={
-              <Button variant="ghost" size="xs">
-                {pageSize} / page
+              <Button variant="outline" size="sm" className="gap-1.5 font-medium text-foreground">
+                {pageSize}
+                <span className="text-muted-foreground">/ page</span>
               </Button>
             }
           />
           <DropdownMenuContent align="start" className="w-32">
             <DropdownMenuRadioGroup
               value={String(pageSize)}
-              onValueChange={(val) => onPageSizeChange(Number(val))}
+              onValueChange={(val) => {
+                onPageSizeChange(Number(val))
+                setPageSizeOpen(false)
+              }}
             >
               {pageSizeOptions.map((size) => (
                 <DropdownMenuRadioItem key={size} value={String(size)}>

@@ -73,7 +73,7 @@ interface DeploymentListProps {
 
 export function DeploymentList({ deployments, sortField, sortDirection, onSort }: DeploymentListProps) {
   return (
-    <div className="rounded-xl bg-card overflow-hidden">
+    <div className="rounded-xl bg-card overflow-hidden border border-border">
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">

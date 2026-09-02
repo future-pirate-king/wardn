@@ -61,7 +61,7 @@ function UsageBar({ label, value, icon }: { label: string; value: number; icon: 
 export function ClusterCard({ cluster }: { cluster: Cluster }) {
   const config = statusConfig[cluster.status]
   return (
-    <Card className="group h-full min-w-[280px] overflow-hidden hover:ring-1 hover:ring-foreground/10 transition-all cursor-pointer">
+    <Card className="group h-full min-w-[300px] overflow-hidden hover:ring-1 hover:ring-foreground/10 transition-all cursor-pointer">
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
           <div className="flex flex-col gap-1 min-w-0">
@@ -76,7 +76,7 @@ export function ClusterCard({ cluster }: { cluster: Cluster }) {
           </button>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-3">
+      <CardContent className="flex flex-1 flex-col gap-4">
         <div className="flex flex-wrap items-center gap-2 min-h-[24px]">
           <Badge variant="secondary" className={cn("gap-1.5", config.className)}>
             {config.icon}

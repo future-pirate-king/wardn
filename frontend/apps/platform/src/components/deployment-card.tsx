@@ -29,7 +29,7 @@ function formatRelativeTime(dateStr: string | null): string {
 
 export function DeploymentCard({ deployment }: { deployment: Deployment }) {
   return (
-    <Card className="group h-full min-w-[260px] overflow-hidden hover:ring-1 hover:ring-foreground/10 transition-all cursor-pointer">
+    <Card className="group h-full min-w-[280px] overflow-hidden hover:ring-1 hover:ring-foreground/10 transition-all cursor-pointer">
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
           <div className="flex flex-col gap-1 min-w-0">
@@ -44,7 +44,7 @@ export function DeploymentCard({ deployment }: { deployment: Deployment }) {
           </button>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-3">
+      <CardContent className="flex flex-1 flex-col gap-4">
         <div className="flex flex-wrap items-center gap-2 min-h-[24px]">
           <SyncStatusBadge status={deployment.syncStatus} />
           <HealthStatusBadge status={deployment.healthStatus} />

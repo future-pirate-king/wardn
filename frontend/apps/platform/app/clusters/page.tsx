@@ -22,7 +22,7 @@ export default function ClustersPage() {
             <h1 className="text-base font-medium">Clusters</h1>
           </div>
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 rounded-tl-2xl bg-background border-l border-t border-border">
+        <div className="flex flex-1 flex-col gap-6 p-6 rounded-tl-2xl bg-background border-l border-t border-border">
           <ClusterView />
         </div>
       </SidebarInset>

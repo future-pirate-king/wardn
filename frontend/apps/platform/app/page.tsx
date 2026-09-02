@@ -119,14 +119,14 @@ function DonutCard({
 
   return (
     <Card className="hover:shadow-none hover:border-border">
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-medium">{title}</CardTitle>
           {icon}
         </div>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
+        <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center">
           <ChartContainer
             config={chartConfig}
             className="aspect-square w-[120px] shrink-0"
@@ -168,7 +168,7 @@ function DonutCard({
             </PieChart>
           </ChartContainer>
           <div className="flex-1 min-w-0 w-full sm:w-auto">
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2.5">
               {segments.map((seg) => (
                 <div key={seg.label} className="flex items-center gap-2 text-sm">
                   <span className="size-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
@@ -284,9 +284,9 @@ export default function Home() {
             <h1 className="text-base font-medium">Overview</h1>
           </div>
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 rounded-tl-2xl bg-background border-l border-t border-border">
+        <div className="flex flex-1 flex-col gap-6 p-6 rounded-tl-2xl bg-background border-l border-t border-border">
           {/* Charts row */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
             <DonutCard
               title="Sync Status"
               icon={<RefreshCcwIcon className="size-4 text-muted-foreground" />}
@@ -311,7 +311,7 @@ export default function Home() {
 
             {/* Resource utilization with CPU/Memory tabs */}
             <Card className="hover:shadow-none hover:border-border">
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-medium">Cluster Resources</CardTitle>
                   <Tabs value={resourceTab} onValueChange={(v) => setResourceTab(v as "cpu" | "memory")}>
@@ -329,7 +329,7 @@ export default function Home() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-col gap-3 mt-1">
+                <div className="flex flex-col gap-4 mt-1">
                   {(resourceTab === "cpu" ? cpuItems : memoryItems).map((item) => (
                     <div key={item.label} className="flex flex-col gap-1.5">
                       <div className="flex items-center justify-between text-sm">
@@ -363,7 +363,7 @@ export default function Home() {
           </div>
 
           {/* Bottom row: recent activity + needs attention */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             {/* Recent activity */}
             <Card className="hover:shadow-none hover:border-border">
               <CardHeader>
@@ -373,9 +373,9 @@ export default function Home() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-col gap-0.5">
+                <div className="flex flex-col gap-2.5">
                   {mockRecentActivity.slice(0, 8).map((activity) => (
-                    <div key={activity.id} className="flex items-start gap-3 rounded-lg p-2 hover:bg-muted/50 transition-colors">
+                    <div key={activity.id} className="flex items-start gap-3 rounded-lg p-2.5 hover:bg-muted/50 transition-colors">
                       <div className={cn("flex size-7 shrink-0 items-center justify-center rounded-lg mt-0.5", activityStatusStyles[activity.status])}>
                         {activityIcons[activity.type]}
                       </div>
@@ -408,10 +408,10 @@ export default function Home() {
                     <p className="text-sm text-muted-foreground">All deployments healthy</p>
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-3">
                     {needsAttention.map((dep) => (
                       <Link key={dep.id} href="/deployments">
-                        <div className="flex items-center gap-3 rounded-lg p-2.5 hover:bg-muted/50 transition-colors cursor-pointer">
+                        <div className="flex items-center gap-3 rounded-lg p-3 hover:bg-muted/50 transition-colors cursor-pointer">
                           <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-700 dark:text-red-400">
                             <CircleAlertIcon className="size-3.5" />
                           </div>
