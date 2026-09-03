@@ -1,0 +1,130 @@
+---
+title: Diff View
+description: Compare live cluster state with Git state before syncing
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Diff View
+
+The diff view shows the difference between the **live cluster state** and the **desired Git state**. Use it to review exactly what a sync will change before applying it.
+
+## Viewing Diffs
+
+### Via the UI
+
+The application detail page shows a live diff when the app is `OutOfSync`:
+
+- **Red lines** — fields that will be removed or changed
+- **Green lines** — fields that will be added or changed
+- **Live vs Desired toggle** — switch between viewing directions
+
+### Via the CLI
+
+```sh
+wardn app diff my-app
+```
+
+Output:
+
+```diff
+--- Deployment/default/my-app (live)
++++ Deployment/default/my-app (git)
+@@ -1,7 +1,7 @@
+ spec:
+   replicas: 3
+   template:
+     spec:
+       containers:
+         - name: app
+-          image: myapp:v1.2.3
++          image: myapp:v1.2.4
+```
+
+### Via the API
+
+```sh
+curl http://localhost:8080/api/v1/apps/default/my-app/diff
+```
+
+## Understanding the Diff
+
+The diff is computed by comparing:
+
+1. **Live state** — the resource as it exists in the cluster
+2. **Desired state** — the manifest as parsed from Git
+
+Only fields managed by Wardn are included in the diff. Fields managed by other controllers (e.g. `status`, defaulting applied by the API server) are excluded.
+
+## Common Diff Scenarios
+
+### Image Tag Change
+
+```diff
+-          image: myapp:v1.2.3
++          image: myapp:v1.2.4
+```
+
+The most common diff — a new image tag was pushed to Git.
+
+### Replica Count Drift
+
+```diff
+-  replicas: 3
++  replicas: 5
+```
+
+Someone manually scaled the deployment. With `selfHeal: true`, this will be reverted on the next sync.
+
+### New Resource
+
+```diff
++++ ConfigMap/default/new-config
++data:
++  key: value
+```
+
+A new resource exists in Git but not in the cluster. It will be created on the next sync.
+
+### Resource Removed from Git
+
+```diff
+--- Service/default/old-service (live)
+```
+
+The resource exists in the cluster but was removed from Git. With `prune: true`, it will be deleted on the next sync.
+
+## Ignoring Differences
+
+<Callout type="info">
+  The `ignoreDifferences` field is planned for a future release. It will allow excluding specific fields from diff computation using JSON pointers.
+</Callout>
+
+Planned configuration:
+
+```yaml
+spec:
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+```
+
+This is useful for resources managed by HPA or other controllers that modify fields Wardn also manages.
+
+## Dry-Run Sync
+
+To see what a sync would do without applying changes:
+
+```sh
+wardn app sync my-app --dry-run
+```
+
+This performs a server-side dry-run apply and shows the result without persisting changes.
+
+## Related
+
+- [Sync Policies](/concepts/sync-policies) — Automated sync and self-heal
+- [Rollback Guide](/guides/rollback) — Revert to previous revisions
+- [CLI Reference](/cli) — Full CLI command reference

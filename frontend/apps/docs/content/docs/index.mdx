@@ -1,25 +1,103 @@
 ---
 title: Introduction
-description: Wardn — GitOps continuous delivery for Kubernetes
+description: Wardn — GitOps continuous delivery for Kubernetes. Enterprise features, not enterprise complexity.
 ---
 
-import { Steps } from "fumadocs-ui/components/steps";
 import { Callout } from "fumadocs-ui/components/callout";
+import { Cards, Card } from "fumadocs-ui/components/card";
 
 # Wardn
 
-Wardn is a GitOps-first continuous delivery operator for Kubernetes. It syncs your cluster state from Git repositories, eliminating manual deployments and configuration drift.
+Wardn is a **GitOps-first continuous delivery platform** for Kubernetes. It synchronizes cluster state from Git repositories — handling manifest parsing, server-side apply, health checks, and notifications — with a focus on operational simplicity.
+
+> **Enterprise features, not enterprise complexity.** Three components. Built-in auth. A UI that doesn't require a YAML editor to create an application.
+
+## How It Works
+
+```
+┌────────────┐     ┌────────────┐     ┌─────────────────┐
+│  Git Repo  │────▶│  Operator  │────▶│  K8s Cluster    │
+│ (source of │     │ (reconcile)│     │ (target state)  │
+│   truth)   │     └─────┬──────┘     └─────────────────┘
+└────────────┘           │
+                         ├──▶ Parse manifests (Raw / Helm / Kustomize)
+                         ├──▶ Server-side apply with pruning
+                         ├──▶ Health checks per resource
+                         ├──▶ Notifications (Slack, Teams, Email)
+                         └──▶ Status updates → Server → UI (SSE)
+```
 
 ## Why Wardn?
 
-- **GitOps-native** — Git is the single source of truth for your deployments
-- **Multi-cluster** — Manage deployments across clusters from a single control plane
-- **Health checks** — Built-in health monitoring with configurable probes
-- **Drift detection** — Automatic reconciliation when cluster state diverges
+| Feature | Wardn | ArgoCD | Flux |
+|---------|-------|--------|------|
+| **Components** | 3 (server, operator, frontend) | 5+ (server, repo-server, controller, dex, redis) | 1 (operator only) |
+| **Built-in UI** | Yes — full dashboard with wizard | Yes — but cluttered | No |
+| **Auth** | Built-in (local + OIDC) | Separate Dex component | None |
+| **Secret management** | SOPS + ESO + Vault with unified UI | SOPS only, no UI | SOPS only |
+| **RBAC** | Project-scoped, UI-managed | CAS config in YAML | None |
+| **Installation** | One Helm chart | Multi-chart setup | kubectl apply |
 
-## Quick Links
+## Key Features
 
-- [Getting Started](/getting-started) — Install Wardn and deploy your first app
-- [Configuration](/configuration) — Learn about GitApplication CRDs and sync policies
-- [Server](/server) — API server architecture, configuration, and endpoints
-- [CLI Reference](/cli) — Command-line tool for managing Wardn
+### Core GitOps
+
+- **Git synchronization** — clone, pull, and track revisions automatically with commit-level granularity
+- **Manifest parsing** — raw YAML/JSON, Helm, and Kustomize support
+- **Server-side apply** — declarative resource management with automatic pruning
+- **Health checks** — per-resource health status aggregation with configurable probes
+- **Sync policies** — automated sync, prune, and self-heal
+- **Multi-cluster** — register and deploy to remote clusters from a single control plane
+
+### Platform & Security
+
+- **Authentication** — local users (bcrypt) + OIDC (Google, GitHub, Keycloak)
+- **RBAC** — project-scoped permissions with read, sync, and admin roles
+- **Audit logging** — complete activity trail for compliance
+- **Real-time updates** — SSE via Redis pub/sub for live sync status
+- **Sync history & rollback** — revision tracking with one-click rollback
+
+### Secret Management
+
+- **SOPS** — decrypt at apply time (AWS KMS, GCP KMS, age, Vault Transit)
+- **External Secrets Operator** — watch CRDs and surface sync status in the UI
+- **Vault Direct** — optional direct Vault integration
+- **Unified UI** — all secret sources visible in a single interface
+
+### Notifications & Webhooks
+
+- **Slack, Teams, Email** — notifications on sync success, failure, and health degradation
+- **GitHub & GitLab** — webhook triggers with signature validation
+
+## Quick Start
+
+```sh
+git clone https://github.com/future-pirate-king/wardn.git
+cd wardn
+docker compose up -d
+```
+
+The platform dashboard is available at `http://localhost:3002`.
+
+<Callout type="info">
+  See the [Getting Started](/getting-started) guide for a complete walkthrough — from installation to deploying your first application.
+</Callout>
+
+## Documentation Sections
+
+<Cards>
+  <Card title="Getting Started" href="/getting-started" description="Install Wardn and deploy your first application in minutes" />
+  <Card title="Configuration" href="/configuration" description="GitApplication CRD spec, fields, and examples" />
+  <Card title="Guides" href="/guides/first-app" description="Step-by-step tutorials for common workflows" />
+  <Card title="Secret Management" href="/secrets/overview" description="SOPS, External Secrets Operator, and Vault integration" />
+  <Card title="API Reference" href="/api/authentication" description="Complete REST API documentation with examples" />
+  <Card title="Operator" href="/operator/architecture" description="Operator architecture, CRD reference, and reconciliation loop" />
+  <Card title="Server" href="/server" description="API server architecture, configuration, and RBAC" />
+  <Card title="CLI Reference" href="/cli" description="Command-line tool for managing Wardn" />
+</Cards>
+
+## Community
+
+- [GitHub Issues](https://github.com/wardn/wardn/issues) — bug reports
+- [GitHub Discussions](https://github.com/wardn/wardn/discussions) — technical discussions
+- [Email](mailto:contact@wardn.space) — support and billing

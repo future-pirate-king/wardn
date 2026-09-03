@@ -1,0 +1,150 @@
+---
+title: Sync Waves and Hooks
+description: Order resource application with sync waves and lifecycle hooks
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Sync Waves and Hooks
+
+<Callout type="info">
+  Sync waves and hooks are planned for Phase 2. This guide describes the target behavior.
+</Callout>
+
+Complex applications often require resources to be applied in a specific order — databases before applications, migrations before pods, etc. Sync waves and hooks solve this.
+
+## Sync Waves
+
+Resources are annotated with a wave number. Wardn applies waves in ascending order and waits for each wave to become healthy before proceeding:
+
+```yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  annotations:
+    wardn.io/sync-wave: "1"     # applied first
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+  annotations:
+    wardn.io/sync-wave: "5"     # applied after postgres is healthy
+```
+
+### Wave Ordering
+
+```
+Wave 0  →  Wave 1  →  Wave 2  →  ...  →  Wave N
+  │           │           │                  │
+  ▼           ▼           ▼                  ▼
+apply      wait for    apply             wait for
+           healthy                       healthy
+```
+
+Resources without a wave annotation default to wave `0`.
+
+### Example: Database + App + Ingress
+
+```yaml
+# Wave 0: Namespace and secrets
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: my-app
+  annotations:
+    wardn.io/sync-wave: "0"
+---
+# Wave 1: Database
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  annotations:
+    wardn.io/sync-wave: "1"
+---
+# Wave 2: Application
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+  annotations:
+    wardn.io/sync-wave: "2"
+---
+# Wave 3: Ingress (only after app is healthy)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-app
+  annotations:
+    wardn.io/sync-wave: "3"
+```
+
+## Lifecycle Hooks
+
+Hooks are resources that run at specific points in the sync lifecycle:
+
+| Hook | When It Runs |
+|------|-------------|
+| `PreSync` | Before any resources are applied |
+| `Sync` | During the sync (alongside regular resources) |
+| `PostSync` | After all resources are healthy |
+| `SyncFail` | Only if the sync fails |
+
+### Example: Database Migration
+
+Run a migration Job before deploying the new application version:
+
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migration
+  annotations:
+    wardn.io/hook: PreSync
+    wardn.io/hook-delete-policy: HookSucceeded
+spec:
+  template:
+    spec:
+      containers:
+        - name: migrate
+          image: myapp:v1.2.4
+          command: ["./migrate", "up"]
+      restartPolicy: Never
+```
+
+### Hook Delete Policies
+
+| Policy | Behavior |
+|--------|----------|
+| `HookSucceeded` | Delete the hook resource after it succeeds |
+| `HookFailed` | Delete the hook resource after it fails |
+| `BeforeHookCreation` | Delete any previous hook resource before creating a new one |
+
+## Sync Wave + Hook Combination
+
+A typical deployment flow:
+
+```
+1. PreSync hook     → Run database migration
+2. Wave 0           → Apply namespace, config
+3. Wave 1           → Apply database (wait for healthy)
+4. Wave 2           → Apply application (wait for healthy)
+5. PostSync hook    → Send notification, run smoke tests
+```
+
+## Failure Handling
+
+If a sync wave fails to become healthy:
+
+1. The sync is marked as `Failed`
+2. Subsequent waves are not applied
+3. The `SyncFail` hook runs (if configured)
+4. A failure notification is sent (if configured)
+
+## Related
+
+- [Sync Policies](/concepts/sync-policies) — Sync automation basics
+- [Health Checks](/concepts/health-checks) — How wave health is evaluated
+- [Roadmap](/reference/roadmap) — When this feature ships

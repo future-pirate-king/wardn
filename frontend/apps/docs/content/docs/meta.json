@@ -1,4 +1,26 @@
 {
   "title": "Wardn",
-  "description": "GitOps continuous delivery for Kubernetes"
+  "description": "GitOps continuous delivery for Kubernetes",
+  "pages": [
+    "index",
+    "---Getting Started---",
+    "getting-started",
+    "---Core Concepts---",
+    "configuration",
+    "concepts",
+    "---Guides---",
+    "guides",
+    "---Secret Management---",
+    "secrets",
+    "---API Reference---",
+    "api",
+    "---Operator---",
+    "operator",
+    "---Server---",
+    "server",
+    "---CLI---",
+    "cli",
+    "---Reference---",
+    "reference"
+  ]
 }

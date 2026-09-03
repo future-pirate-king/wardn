@@ -1,73 +1,209 @@
 ---
 title: Configuration
-description: GitApplication CRD spec and sync policies
+description: GitApplication CRD spec, fields, and examples
 ---
 
-import { Steps } from "fumadocs-ui/components/steps";
 import { Callout } from "fumadocs-ui/components/callout";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 
 # Configuration
 
+The `GitApplication` custom resource is the core abstraction in Wardn. It defines **what** to deploy (Git repo + path), **how** to deploy it (manifest type, sync policy), and **where** to deploy it (target cluster).
+
 ## GitApplication Spec
 
-The `GitApplication` custom resource defines a deployment source and sync policy.
-
-### Core Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `repoURL` | string | Git repository URL |
-| `path` | string | Path within repo to manifests |
-| `targetRevision` | string | Branch, tag, or commit SHA |
-| `syncPolicy` | object | Sync automation settings |
-
-### Example
+### Full Example
 
 ```yaml
-apiVersion: wardn.io/v1alpha1
+apiVersion: cd.wardn.space/v1alpha1
 kind: GitApplication
 metadata:
   name: production-app
   namespace: default
 spec:
   repoURL: https://github.com/myorg/my-app
+  branch: main
   path: k8s/overlays/production
-  targetRevision: main
+  manifestType: Raw
+  targetCluster: ""            # empty = in-cluster
   syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    healthChecks:
-      - kind: Deployment
-        name: api
-        checkType: readiness
+    automated: true
+    prune: true
+    selfHeal: true
+  notifications:
+    slack:
+      webhookURL: https://hooks.slack.com/services/...
+    onSyncSuccess: true
+    onSyncFailure: true
+    onHealthDegraded: true
+  webhook:
+    enabled: true
+    secretRef: webhook-secret
 ```
+
+### Spec Fields
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `repoURL` | string | Yes | — | Git repository URL (HTTPS or SSH) |
+| `branch` | string | Yes | `main` | Git branch to track |
+| `path` | string | Yes | `.` | Path within repo containing manifests |
+| `manifestType` | enum | No | `Raw` | `Raw` or `Helm` |
+| `helm` | object | No | — | Helm-specific config (see below) |
+| `targetCluster` | string | No | `""` | API server URL of target cluster (empty = in-cluster) |
+| `syncPolicy` | object | No | — | Sync automation settings (see below) |
+| `notifications` | object | No | — | Notification config (see below) |
+| `webhook` | object | No | — | Git webhook trigger config (see below) |
+
+### Helm Configuration
+
+When `manifestType` is `Helm`, provide a `helm` block:
+
+```yaml
+spec:
+  manifestType: Helm
+  helm:
+    valuesFile: values/production.yaml
+    releaseName: my-app
+    namespace: production
+    inlineValues: |
+      replicas: 3
+      image:
+        tag: v1.2.3
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `valuesFile` | string | Path to a values.yaml file within the repo |
+| `releaseName` | string | Helm release name |
+| `namespace` | string | Target namespace for the Helm release |
+| `inlineValues` | string | Raw YAML values applied on top of `valuesFile` |
 
 ## Sync Policies
 
 ### Automated Sync
 
-When `automated` is enabled, Wardn continuously reconciles the cluster state with Git.
+When `automated: true`, Wardn continuously reconciles the cluster state with Git. Every push to the tracked branch triggers a sync.
 
-- **`prune`**: Removes resources that are no longer in Git
-- **`selfHeal`**: Reapplies changes if someone manually edits cluster resources
+```yaml
+spec:
+  syncPolicy:
+    automated: true
+    prune: true
+    selfHeal: true
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `automated` | bool | `false` | Enable automatic syncing when Git state changes |
+| `prune` | bool | `false` | Remove resources that are no longer tracked in Git |
+| `selfHeal` | bool | `false` | Re-apply desired state if live state drifts |
+
+<Callout type="warn">
+  **Prune** will delete Kubernetes resources that exist in the cluster but are no longer present in Git. Use with caution in production — consider enabling `selfHeal` first and adding `prune` once you're confident.
+</Callout>
 
 ### Manual Sync
 
-Omit the `automated` field to require manual sync triggers via CLI or UI.
-
-## Health Checks
-
-Configure health probes to determine if a sync was successful:
+Omit the `syncPolicy` field or set `automated: false` to require manual sync triggers:
 
 ```yaml
-syncPolicy:
-  healthChecks:
-    - kind: Deployment
-      name: api-server
-      checkType: readiness
-    - kind: Job
-      name: migration
-      checkType: completion
+spec:
+  syncPolicy:
+    automated: false
 ```
+
+Trigger a manual sync via the UI, CLI, or API:
+
+```sh
+# CLI
+wardn app sync my-app
+
+# API
+curl -X POST http://localhost:8080/api/v1/apps/default/my-app/sync
+```
+
+## Notifications
+
+Configure alerts for sync and health events:
+
+```yaml
+spec:
+  notifications:
+    slack:
+      webhookURL: https://hooks.slack.com/services/T000/B000/XXX
+    onSyncSuccess: true
+    onSyncFailure: true
+    onHealthDegraded: true
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `slack.webhookURL` | string | Slack incoming webhook URL |
+| `onSyncSuccess` | bool | Notify when sync succeeds |
+| `onSyncFailure` | bool | Notify when sync fails |
+| `onHealthDegraded` | bool | Notify when app health degrades |
+
+<Callout type="info">
+  Future notification channels: Microsoft Teams, Email, Discord, and generic webhooks.
+</Callout>
+
+## Webhook Configuration
+
+Enable Git provider webhooks to trigger immediate reconciliation on push events:
+
+```yaml
+spec:
+  webhook:
+    enabled: true
+    secretRef: webhook-secret
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | bool | Allow webhook-triggered syncs |
+| `secretRef` | string | Name of a Secret containing the webhook validation secret |
+
+The webhook receiver runs on port `8082` by default. Configure your Git provider to send push events to:
+
+- **GitHub**: `http://your-operator:8082/webhook/github`
+- **GitLab**: `http://your-operator:8082/webhook/gitlab`
+
+## Status Fields
+
+Wardn writes status back to the `GitApplication` CRD. You can inspect it with `kubectl describe`:
+
+```sh
+kubectl describe gitapplication my-app
+```
+
+| Status Field | Type | Description |
+|-------------|------|-------------|
+| `syncStatus` | enum | `Synced`, `OutOfSync`, `Syncing`, `Unknown` |
+| `healthStatus` | enum | `Healthy`, `Degraded`, `Progressing`, `Missing`, `Unknown` |
+| `lastSyncAt` | time | Timestamp of last successful sync |
+| `revision` | string | Current Git commit hash |
+| `previousRevisions` | []string | Recent sync revisions (for rollback, max 10) |
+| `resources` | []object | Per-resource sync + health status |
+| `conditions` | []object | Operational conditions (e.g. `SyncError`) |
+
+## Future Fields
+
+The following fields are planned for upcoming releases:
+
+| Field | Description |
+|-------|-------------|
+| `project` | Project name for RBAC scoping |
+| `syncWaves` | Wave ordering for resources |
+| `hooks` | PreSync/Sync/PostSync/SyncFail hook resources |
+| `ignoreDifferences` | JSON pointers for diff customization |
+| `credentialRef` | Reference to repo credentials Secret |
+| `kustomizeConfig` | Kustomize-specific settings (images, overlays) |
+| `secretStoreRef` | Reference to a wardn-managed secret store |
+
+## Related
+
+- [Sync Policies](/concepts/sync-policies) — Deep dive into automated sync, prune, and self-heal
+- [Health Checks](/concepts/health-checks) — How Wardn evaluates resource health
+- [Manifest Management](/concepts/manifest-management) — Raw YAML, Helm, and Kustomize
+- [CRD Reference](/operator/crd-reference) — Complete CRD type definitions

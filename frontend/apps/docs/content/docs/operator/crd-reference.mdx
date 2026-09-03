@@ -1,0 +1,221 @@
+---
+title: CRD Reference
+description: Complete GitApplication CRD type definitions
+---
+
+# CRD Reference
+
+Complete reference for the `GitApplication` custom resource (`cd.wardn.space/v1alpha1`).
+
+## GitApplicationSpec
+
+The desired state of the application.
+
+```go
+type GitApplicationSpec struct {
+    RepoURL       string              `json:"repoURL"`
+    Branch        string              `json:"branch"`
+    Path          string              `json:"path"`
+    ManifestType  ManifestType        `json:"manifestType"`
+    Helm          *HelmConfig         `json:"helm,omitempty"`
+    TargetCluster string              `json:"targetCluster,omitempty"`
+    SyncPolicy    *SyncPolicy         `json:"syncPolicy,omitempty"`
+    Notifications *NotificationConfig `json:"notifications,omitempty"`
+    Webhook       *WebhookConfig      `json:"webhook,omitempty"`
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `repoURL` | string | Yes | Git repository URL (HTTPS or SSH) |
+| `branch` | string | Yes | Branch to track |
+| `path` | string | Yes | Path to manifests within the repo |
+| `manifestType` | ManifestType | No | `Raw` (default) or `Helm` |
+| `helm` | HelmConfig | No | Helm rendering config |
+| `targetCluster` | string | No | Target cluster name (empty = in-cluster) |
+| `syncPolicy` | SyncPolicy | No | Sync automation |
+| `notifications` | NotificationConfig | No | Alert configuration |
+| `webhook` | WebhookConfig | No | Git webhook triggers |
+
+## ManifestType
+
+```go
+type ManifestType string
+
+const (
+    ManifestTypeRaw  ManifestType = "Raw"
+    ManifestTypeHelm ManifestType = "Helm"
+)
+```
+
+## HelmConfig
+
+```go
+type HelmConfig struct {
+    ValuesFile  string `json:"valuesFile,omitempty"`
+    ReleaseName string `json:"releaseName,omitempty"`
+    Namespace   string `json:"namespace,omitempty"`
+    InlineValues string `json:"inlineValues,omitempty"`
+}
+```
+
+## SyncPolicy
+
+```go
+type SyncPolicy struct {
+    Automated bool `json:"automated,omitempty"`
+    Prune     bool `json:"prune,omitempty"`
+    SelfHeal  bool `json:"selfHeal,omitempty"`
+}
+```
+
+## NotificationConfig
+
+```go
+type NotificationConfig struct {
+    Slack            *SlackConfig `json:"slack,omitempty"`
+    OnSyncSuccess    bool         `json:"onSyncSuccess,omitempty"`
+    OnSyncFailure    bool         `json:"onSyncFailure,omitempty"`
+    OnHealthDegraded bool         `json:"onHealthDegraded,omitempty"`
+}
+
+type SlackConfig struct {
+    WebhookURL string `json:"webhookURL"`
+}
+```
+
+## WebhookConfig
+
+```go
+type WebhookConfig struct {
+    Enabled   bool   `json:"enabled,omitempty"`
+    SecretRef string `json:"secretRef,omitempty"`
+}
+```
+
+## GitApplicationStatus
+
+The observed state, written by the operator.
+
+```go
+type GitApplicationStatus struct {
+    SyncStatus        SyncStatus         `json:"syncStatus"`
+    HealthStatus      HealthStatus       `json:"healthStatus"`
+    LastSyncAt        *metav1.Time       `json:"lastSyncAt,omitempty"`
+    Revision          string             `json:"revision,omitempty"`
+    PreviousRevisions []string           `json:"previousRevisions,omitempty"`
+    Resources         []ResourceStatus   `json:"resources,omitempty"`
+    Conditions        []metav1.Condition `json:"conditions,omitempty"`
+}
+```
+
+### SyncStatus
+
+```go
+type SyncStatus string
+
+const (
+    SyncStatusSynced    SyncStatus = "Synced"
+    SyncStatusOutOfSync SyncStatus = "OutOfSync"
+    SyncStatusSyncing   SyncStatus = "Syncing"
+    SyncStatusUnknown   SyncStatus = "Unknown"
+)
+```
+
+### HealthStatus
+
+```go
+type HealthStatus string
+
+const (
+    HealthStatusHealthy     HealthStatus = "Healthy"
+    HealthStatusDegraded    HealthStatus = "Degraded"
+    HealthStatusProgressing HealthStatus = "Progressing"
+    HealthStatusMissing     HealthStatus = "Missing"
+    HealthStatusUnknown     HealthStatus = "Unknown"
+)
+```
+
+### ResourceStatus
+
+Per-resource sync and health tracking:
+
+```go
+type ResourceStatus struct {
+    Group        string       `json:"group,omitempty"`
+    Kind         string       `json:"kind"`
+    Namespace    string       `json:"namespace,omitempty"`
+    Name         string       `json:"name"`
+    SyncStatus   SyncStatus   `json:"syncStatus"`
+    HealthStatus HealthStatus `json:"healthStatus"`
+    Message      string       `json:"message,omitempty"`
+}
+```
+
+### Conditions
+
+Standard Kubernetes conditions:
+
+| Type | Meaning |
+|------|---------|
+| `Synced` | Last sync completed successfully |
+| `SyncError` | Last sync failed (message contains the error) |
+| `Healthy` | All resources are healthy |
+
+## Complete Example
+
+```yaml
+apiVersion: cd.wardn.space/v1alpha1
+kind: GitApplication
+metadata:
+  name: full-example
+  namespace: default
+spec:
+  repoURL: https://github.com/myorg/my-app
+  branch: main
+  path: k8s/production
+  manifestType: Helm
+  helm:
+    valuesFile: values/production.yaml
+    releaseName: my-app
+    namespace: production
+    inlineValues: |
+      replicas: 3
+  targetCluster: ""
+  syncPolicy:
+    automated: true
+    prune: true
+    selfHeal: true
+  notifications:
+    slack:
+      webhookURL: https://hooks.slack.com/services/...
+    onSyncSuccess: false
+    onSyncFailure: true
+    onHealthDegraded: true
+  webhook:
+    enabled: true
+    secretRef: webhook-secret
+status:
+  syncStatus: Synced
+  healthStatus: Healthy
+  revision: a1b2c3d4e5f6
+  lastSyncAt: "2024-01-15T10:30:00Z"
+  previousRevisions:
+    - f6e5d4c3b2a1
+  resources:
+    - kind: Deployment
+      name: my-app
+      syncStatus: Synced
+      healthStatus: Healthy
+  conditions:
+    - type: Synced
+      status: "True"
+      lastTransitionTime: "2024-01-15T10:30:00Z"
+      reason: SyncSuccessful
+```
+
+## Related
+
+- [Configuration](/configuration) — Field-by-field usage guide
+- [Reconciliation Loop](/operator/reconciliation) — How the operator processes this spec
+- [Architecture](/operator/architecture) — Operator components

@@ -20,7 +20,14 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="flex flex-col min-h-screen">
         <ClipboardPolyfill />
-        <RootProvider>
+        <RootProvider
+          search={{
+            options: {
+              type: "static",
+              api: "/api/search",
+            },
+          }}
+        >
           <DocsLayout
             nav={{
               title: (

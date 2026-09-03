@@ -1,0 +1,139 @@
+---
+title: Audit Log
+description: Query the audit trail — who did what, when
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Audit API
+
+Every state-changing operation in Wardn is recorded in the audit log — syncs, rollbacks, project changes, cluster registrations, and more. This provides a complete compliance trail.
+
+## Endpoints
+
+### List Audit Entries
+
+```http
+GET /api/v1/audit
+```
+
+**Query Parameters**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `actor` | string | Filter by user email or ID |
+| `action` | string | Filter by action type (see below) |
+| `resource` | string | Filter by resource (e.g. `app:default/my-app`) |
+| `from` | string | ISO 8601 timestamp — start of range |
+| `to` | string | ISO 8601 timestamp — end of range |
+| `limit` | int | Max results (default 50, max 500) |
+| `offset` | int | Pagination offset |
+
+**Response — 200 OK**
+
+```json
+{
+  "items": [
+    {
+      "id": "aud_01H8X2K3M4N5P6Q7R8S9T0U1V8",
+      "timestamp": "2024-01-15T10:30:00Z",
+      "actor": "alice@example.com",
+      "action": "app.sync",
+      "resource": "app:default/my-app",
+      "details": {
+        "revision": "a1b2c3d4e5f6",
+        "trigger": "manual"
+      },
+      "ip": "203.0.113.42",
+      "userAgent": "wardn-cli/0.1.0"
+    },
+    {
+      "id": "aud_01H8X2K3M4N5P6Q7R8S9T0U1V9",
+      "timestamp": "2024-01-15T10:28:15Z",
+      "actor": "system",
+      "action": "app.sync",
+      "resource": "app:default/my-app",
+      "details": {
+        "revision": "a1b2c3d4e5f6",
+        "trigger": "webhook:github"
+      }
+    }
+  ],
+  "total": 142
+}
+```
+
+## Audited Actions
+
+| Action | Description |
+|--------|-------------|
+| `auth.login` | User login |
+| `auth.logout` | User logout |
+| `auth.register` | User registration |
+| `app.create` | GitApplication created |
+| `app.delete` | GitApplication deleted |
+| `app.sync` | Sync triggered (manual, webhook, or automated) |
+| `app.rollback` | Rollback triggered |
+| `project.create` | Project created |
+| `project.update` | Project settings changed |
+| `project.member.add` | Member added to project |
+| `project.member.remove` | Member removed from project |
+| `cluster.register` | Cluster registered |
+| `cluster.remove` | Cluster removed |
+| `secretstore.create` | Secret store configured |
+| `secretstore.update` | Secret store updated |
+| `secretstore.test` | Secret store connection tested |
+
+## Example Queries
+
+### All syncs in the last 24 hours
+
+```sh
+curl "http://localhost:8080/api/v1/audit?action=app.sync&from=2024-01-14T10:30:00Z" \
+  -b cookies.txt
+```
+
+### All actions by a specific user
+
+```sh
+curl "http://localhost:8080/api/v1/audit?actor=alice@example.com" \
+  -b cookies.txt
+```
+
+### All changes to a specific application
+
+```sh
+curl "http://localhost:8080/api/v1/audit?resource=app:default/my-app" \
+  -b cookies.txt
+```
+
+### Paginated export
+
+```sh
+# Fetch all entries in pages of 500
+offset=0
+while true; do
+  curl "http://localhost:8080/api/v1/audit?limit=500&offset=$offset" \
+    -b cookies.txt > "audit-$offset.json"
+  count=$(jq '.items | length' "audit-$offset.json")
+  [ "$count" -lt 500 ] && break
+  offset=$((offset + 500))
+done
+```
+
+## Retention
+
+<Callout type="info">
+  Audit entries are retained for 90 days by default. Retention is configurable via the `AUDIT_RETENTION_DAYS` environment variable (planned).
+</Callout>
+
+## Access Control
+
+- All authenticated users can read the audit log for projects they belong to
+- Global audit access requires admin privileges
+- Audit entries are immutable — they cannot be edited or deleted via the API
+
+## Related
+
+- [Server Overview](/server) — `audit_log` table schema
+- [RBAC](/operator/rbac) — Who can see what

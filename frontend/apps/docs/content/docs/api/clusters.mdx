@@ -1,0 +1,148 @@
+---
+title: Clusters
+description: Register and manage target Kubernetes clusters
+---
+
+# Clusters API
+
+Register remote Kubernetes clusters as deployment targets for multi-cluster GitOps.
+
+## Endpoints
+
+### List Clusters
+
+```http
+GET /api/v1/clusters
+```
+
+**Response — 200 OK**
+
+```json
+{
+  "items": [
+    {
+      "id": "cls_01H8X2K3M4N5P6Q7R8S9T0U1V6",
+      "name": "staging",
+      "server": "https://staging.example.com:6443",
+      "status": "Connected",
+      "version": "v1.29.1",
+      "registeredAt": "2024-01-12T11:00:00Z",
+      "apps": 8
+    },
+    {
+      "id": "cls_01H8X2K3M4N5P6Q7R8S9T0U1V7",
+      "name": "production",
+      "server": "https://prod.example.com:6443",
+      "status": "Connected",
+      "version": "v1.29.1",
+      "registeredAt": "2024-01-12T11:05:00Z",
+      "apps": 12
+    }
+  ]
+}
+```
+
+The in-cluster cluster is implicit and not listed — it's always available as the default target.
+
+---
+
+### Register Cluster
+
+```http
+POST /api/v1/clusters
+```
+
+Requires the `admin` role.
+
+**Request Body**
+
+```json
+{
+  "name": "staging",
+  "server": "https://staging.example.com:6443",
+  "credentials": "eyJhbGciOiJSUzI1NiIs...",
+  "credentialType": "token"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Unique cluster name |
+| `server` | string | Yes | API server URL |
+| `credentials` | string | Yes | Service account token or kubeconfig (base64) |
+| `credentialType` | string | No | `token` (default) or `kubeconfig` |
+
+**Response — 201 Created**
+
+```json
+{
+  "id": "cls_01H8X2K3M4N5P6Q7R8S9T0U1V6",
+  "name": "staging",
+  "server": "https://staging.example.com:6443",
+  "status": "Connected",
+  "version": "v1.29.1"
+}
+```
+
+Wardn immediately tests the connection and fetches the cluster version.
+
+**Errors**
+
+| Status | Description |
+|--------|-------------|
+| `400` | Invalid server URL or credentials |
+| `403` | Insufficient permissions |
+| `409` | Cluster name already registered |
+| `422` | Connection test failed (unreachable or auth rejected) |
+
+---
+
+### Test Cluster Connection
+
+```http
+POST /api/v1/clusters/{id}/test
+```
+
+**Response — 200 OK**
+
+```json
+{
+  "status": "Connected",
+  "version": "v1.29.1",
+  "latency": "45ms"
+}
+```
+
+---
+
+### Remove Cluster
+
+```http
+DELETE /api/v1/clusters/{id}
+```
+
+Requires the `admin` role.
+
+**Response — 204 No Content**
+
+Applications targeting the removed cluster will fail on next sync. Wardn returns `409 Conflict` if any applications still reference the cluster:
+
+```json
+{
+  "error": "cluster in use by 3 applications",
+  "apps": ["my-app-staging", "api-staging", "worker-staging"]
+}
+```
+
+## Security
+
+- **Credentials encrypted at rest** — cluster tokens are encrypted in the database
+- **Least privilege** — use service accounts with only the permissions Wardn needs
+- **Network policies** — restrict which pods can reach the Wardn operator
+- **Rotation** — rotate cluster credentials regularly via re-registration
+
+## Related
+
+- [Multi-Cluster Guide](/guides/multi-cluster) — Step-by-step tutorial
+- [Configuration](/configuration) — `targetCluster` field reference
+- [Server Overview](/server) — Database schema

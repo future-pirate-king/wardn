@@ -1,0 +1,128 @@
+---
+title: Health Checks
+description: How Wardn evaluates resource health after sync
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Health Checks
+
+After applying manifests, Wardn checks the health of each deployed resource. Health status is aggregated at the application level and surfaced in the UI, CLI, and API.
+
+## Health States
+
+| Status | Description |
+|--------|-------------|
+| `Healthy` | Resource is functioning correctly |
+| `Degraded` | Resource is in a failed or error state |
+| `Progressing` | Resource is being created or updated |
+| `Missing` | Resource doesn't exist in the cluster |
+| `Unknown` | Health cannot be determined |
+
+## Per-Resource Health Checks
+
+Wardn includes built-in health checks for common Kubernetes resource types:
+
+### Deployment
+
+A Deployment is `Healthy` when:
+- `status.readyReplicas` equals `spec.replicas`
+- `status.updatedReplicas` equals `spec.replicas`
+- No pods are in `CrashLoopBackOff` or `ImagePullBackOff`
+
+A Deployment is `Progressing` when:
+- `readyReplicas` < `spec.replicas`
+- A rollout is in progress
+
+A Deployment is `Degraded` when:
+- `readyReplicas` = 0 and `spec.replicas` > 0
+- Any pod is in a failed state
+
+### StatefulSet
+
+A StatefulSet is `Healthy` when:
+- `status.readyReplicas` equals `spec.replicas`
+- `status.updatedReplicas` equals `spec.replicas`
+
+### Service
+
+A Service is `Healthy` when:
+- The Service exists and has a cluster IP assigned
+- For LoadBalancer services, an external IP is assigned
+
+### Job
+
+A Job is `Healthy` when:
+- `status.succeeded` >= 1 (job completed successfully)
+
+A Job is `Progressing` when:
+- The job is still running
+
+A Job is `Degraded` when:
+- `status.failed` > 0 and no successful completions
+
+### Custom Resources (CRDs)
+
+For custom resources, Wardn checks the `status.conditions` field for a `Ready` condition with `status: "True"`.
+
+<Callout type="info">
+  Future: Lua-based custom health checks will allow you to define health logic for any CRD.
+</Callout>
+
+## Application-Level Health
+
+The application's overall health status is the **worst** health status of any managed resource:
+
+```
+If any resource is Degraded    → App is Degraded
+Else if any resource is Missing → App is Degraded
+Else if any resource is Progressing → App is Progressing
+Else if all resources are Healthy → App is Healthy
+Else → App is Unknown
+```
+
+## Viewing Health Status
+
+### Via kubectl
+
+```sh
+kubectl get gitapplication my-app -o jsonpath='{.status.healthStatus}'
+```
+
+### Via CLI
+
+```sh
+wardn app get my-app
+```
+
+### Via API
+
+```sh
+curl http://localhost:8080/api/v1/apps/default/my-app | jq '.health'
+```
+
+### Via UI
+
+The dashboard shows health badges (green/yellow/red) for each application and individual resource.
+
+## Health Check Intervals
+
+The operator re-checks health:
+- Immediately after a sync
+- Every 60 seconds during the periodic reconciliation loop
+- On-demand when a manual sync is triggered
+
+## Future: Custom Health Checks
+
+Planned features for health check customization:
+
+- **Lua scripts** — define custom health check logic per resource type
+- **Health check plugins** — extend the operator with Go plugins
+- **Ignore resources** — exclude specific resources from health aggregation
+- **Custom conditions** — specify which conditions to check for CRDs
+
+## Related
+
+- [Sync Policies](/concepts/sync-policies) — How sync triggers work
+- [Configuration](/configuration) — GitApplication CRD spec
+- [Operator Architecture](/operator/architecture) — How the operator runs health checks

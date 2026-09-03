@@ -1,0 +1,255 @@
+---
+title: Creating Your First App
+description: A complete walkthrough — from empty cluster to running application
+---
+
+import { Steps, Step } from "fumadocs-ui/components/steps";
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Creating Your First App
+
+This tutorial walks you through deploying a real application with Wardn — from an empty cluster to a running, healthy application with automated sync.
+
+## What You'll Build
+
+A simple web application with:
+- A **Deployment** running 3 replicas
+- A **Service** exposing it internally
+- A **ConfigMap** with application configuration
+- **Automated sync** with self-heal enabled
+
+## Prerequisites
+
+- Wardn installed ([Getting Started](/getting-started))
+- A Git repository you can push to (GitHub, GitLab, or any Git host)
+- `kubectl` configured against your cluster
+
+## Tutorial
+
+<Steps>
+
+### Step 1: Create the Application Repo
+
+Create a new Git repository with the following structure:
+
+```
+my-first-app/
+└── manifests/
+    ├── deployment.yaml
+    ├── service.yaml
+    └── configmap.yaml
+```
+
+**manifests/deployment.yaml**
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-first-app
+  labels:
+    app: my-first-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-first-app
+  template:
+    metadata:
+      labels:
+        app: my-first-app
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.25
+          ports:
+            - containerPort: 80
+          envFrom:
+            - configMapRef:
+                name: my-first-app-config
+```
+
+**manifests/service.yaml**
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-first-app
+spec:
+  selector:
+    app: my-first-app
+  ports:
+    - port: 80
+      targetPort: 80
+```
+
+**manifests/configmap.yaml**
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-first-app-config
+data:
+  APP_ENV: "production"
+  LOG_LEVEL: "info"
+```
+
+### Step 2: Push to Git
+
+```sh
+cd my-first-app
+git init
+git add .
+git commit -m "Initial manifests"
+git remote add origin https://github.com/yourorg/my-first-app.git
+git push -u origin main
+```
+
+### Step 3: Create the GitApplication
+
+Create `gitapplication.yaml`:
+
+```yaml
+apiVersion: cd.wardn.space/v1alpha1
+kind: GitApplication
+metadata:
+  name: my-first-app
+  namespace: default
+spec:
+  repoURL: https://github.com/yourorg/my-first-app
+  branch: main
+  path: manifests
+  manifestType: Raw
+  syncPolicy:
+    automated: true
+    prune: true
+    selfHeal: true
+```
+
+Apply it:
+
+```sh
+kubectl apply -f gitapplication.yaml
+```
+
+### Step 4: Watch the Sync
+
+```sh
+kubectl get gitapplication my-first-app -w
+```
+
+Within ~60 seconds (or immediately if you configured a webhook), you should see:
+
+```
+NAME            SYNC STATUS   HEALTH     REVISION
+my-first-app    Syncing       Unknown    a1b2c3d
+my-first-app    Synced        Healthy    a1b2c3d
+```
+
+### Step 5: Verify the Deployment
+
+```sh
+kubectl get pods -l app=my-first-app
+kubectl get svc my-first-app
+```
+
+Expected output:
+
+```
+NAME                          READY   STATUS    RESTARTS   AGE
+my-first-app-7d6f8c5b-x2k9m   1/1     Running   0          30s
+my-first-app-7d6f8c5b-p3rlq   1/1     Running   0          30s
+my-first-app-7d6f8c5b-n8w2x   1/1     Running   0          30s
+```
+
+### Step 6: Test Self-Heal
+
+Let's verify that self-heal works. Manually scale the deployment:
+
+```sh
+kubectl scale deployment my-first-app --replicas=1
+```
+
+Within 60 seconds, Wardn will detect the drift and restore the replicas to 3:
+
+```sh
+kubectl get deployment my-first-app
+# NAME           READY   UP-TO-DATE   AVAILABLE   AGE
+# my-first-app   3/3     3            3           2m
+```
+
+### Step 7: Deploy a Change
+
+Update the image tag in `manifests/deployment.yaml`:
+
+```yaml
+image: nginx:1.26
+```
+
+Commit and push:
+
+```sh
+git add manifests/deployment.yaml
+git commit -m "Upgrade nginx to 1.26"
+git push
+```
+
+Wardn will detect the new revision and sync automatically. Watch it happen:
+
+```sh
+kubectl get gitapplication my-first-app -w
+```
+
+</Steps>
+
+## What Just Happened?
+
+1. **You pushed to Git** — the single source of truth changed
+2. **The operator detected the new revision** — via polling or webhook
+3. **Manifests were parsed** — YAML files converted to Kubernetes resources
+4. **Server-side apply** — resources applied to the cluster
+5. **Health checks ran** — Deployment, Service, and ConfigMap verified
+6. **Status updated** — CRD status written, UI updated in real-time via SSE
+
+## Troubleshooting
+
+### Sync Status is `Unknown`
+
+Check the operator logs:
+
+```sh
+kubectl logs -n wardn-system deployment/wardn-operator
+```
+
+Common causes:
+- Repository URL is incorrect or private without credentials
+- Branch doesn't exist
+- Path doesn't contain any manifests
+
+### Health Status is `Degraded`
+
+Check individual resource status:
+
+```sh
+kubectl get gitapplication my-first-app -o jsonpath='{.status.resources}' | jq
+```
+
+Common causes:
+- Image pull errors (check image name and registry access)
+- Crash loops (check pod logs with `kubectl logs`)
+- Missing ConfigMap references
+
+### Sync Doesn't Trigger
+
+- Verify `syncPolicy.automated` is `true`
+- Check the operator is running: `kubectl get pods -n wardn-system`
+- If using webhooks, verify the webhook URL is reachable from your Git provider
+
+## Next Steps
+
+- [Multi-Cluster Deployment](/guides/multi-cluster) — Deploy to remote clusters
+- [Helm Charts](/guides/helm-charts) — Deploy Helm charts instead of raw YAML
+- [Rollback](/guides/rollback) — Roll back to a previous revision
+- [Webhook Triggers](/guides/webhook-triggers) — Instant syncs on push

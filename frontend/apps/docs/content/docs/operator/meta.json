@@ -1,0 +1,12 @@
+{
+  "title": "Operator",
+  "description": "Operator architecture, CRD reference, reconciliation, webhooks, and notifications",
+  "pages": [
+    "architecture",
+    "crd-reference",
+    "reconciliation",
+    "webhooks",
+    "notifications",
+    "rbac"
+  ]
+}

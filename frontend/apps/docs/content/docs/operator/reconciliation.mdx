@@ -1,0 +1,190 @@
+---
+title: Reconciliation Loop
+description: How the operator syncs Git state to your cluster, step by step
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Reconciliation Loop
+
+The operator runs a reconciliation loop for every `GitApplication`. This page walks through each step of the loop, based on the actual implementation in `gitapplication_controller.go`.
+
+## The Loop
+
+```
+┌─────────────────────────────────────────────────────┐
+│                  Reconcile(app)                      │
+│                                                      │
+│  1. Fetch GitApplication                             │
+│  2. Clone or pull the Git repository                 │
+│  3. Parse manifests (Raw/Helm)                       │
+│  4. Determine if sync is needed                      │
+│  5. Apply manifests (server-side apply)              │
+│  6. Run health checks                                │
+│  7. Update status                                    │
+│  8. Send notifications                               │
+│  9. Requeue after 60s                                │
+└─────────────────────────────────────────────────────┘
+```
+
+## Step-by-Step
+
+### 1. Fetch the GitApplication
+
+```go
+var app v1alpha1.GitApplication
+if err := r.Get(ctx, req.NamespacedName, &app); err != nil {
+    return ctrl.Result{}, client.IgnoreNotFound(err)
+}
+```
+
+Deleted applications are ignored (finalizer cleanup handles resource removal).
+
+### 2. Clone or Pull
+
+```go
+revision, err := r.GitClient.CloneOrPull(ctx, app.Spec.RepoURL, app.Spec.Branch)
+```
+
+- **First sync** — full clone of the repository
+- **Subsequent syncs** — `git pull` to fetch new commits
+- The local clone is cached between reconciliations to minimize network traffic
+
+On failure, the app status is set to `Unknown` with a `SyncError` condition.
+
+### 3. Parse Manifests
+
+```go
+resources, err := r.Parser.Parse(
+    ctx,
+    r.GitClient.LocalPath(app.Spec.RepoURL),
+    app.Spec.Path,
+    app.Spec.ManifestType,
+    app.Spec.Helm,
+)
+```
+
+- **Raw** — reads all `.yaml`/`.yml`/`.json` files in the path
+- **Helm** — renders the chart with the Helm SDK using configured values
+
+Parse errors set `SyncStatus: Unknown` and a `SyncError` condition.
+
+### 4. Determine if Sync Is Needed
+
+The operator compares:
+
+| Signal | Meaning |
+|--------|---------|
+| New revision | Git HEAD differs from `status.revision` |
+| Drift detected | Live state differs from desired state |
+| Manual sync trigger | Sync annotation present (from API/CLI/webhook) |
+| `selfHeal` enabled | Re-apply even without changes |
+
+If nothing changed and `selfHeal` is off, the loop skips to health checks.
+
+### 5. Apply Manifests
+
+```go
+applier := k8s.NewApplier(r.Client, app.Spec.TargetCluster)
+err := applier.Apply(ctx, resources, app.Spec.SyncPolicy)
+```
+
+- **Server-side apply** with field manager `wardn`
+- **Pruning** — resources labeled `managed-by: wardn` that are no longer in Git are deleted
+- **Ordering** — resources applied in a deterministic order (namespaces first, then CRDs, then workloads)
+
+### 6. Health Checks
+
+```go
+healthStatus, resourceStatuses := r.HealthChecker.Check(ctx, &app, resources)
+```
+
+Each resource is inspected:
+
+- **Deployment/StatefulSet** — replica readiness
+- **Service** — cluster IP assignment
+- **Job** — completion status
+- **CRDs** — `Ready` condition
+
+See [Health Checks](/concepts/health-checks) for the full status logic.
+
+### 7. Update Status
+
+```go
+r.updateStatus(ctx, &app, syncStatus, healthStatus, revision, resources, err)
+```
+
+Writes:
+
+- `syncStatus` and `healthStatus`
+- `revision` (current) and `previousRevisions` (history, max 10)
+- Per-resource `resources[]` statuses
+- Conditions (`Synced`, `SyncError`, `Healthy`)
+
+The status update is also published to Redis pub/sub, which the server streams to the UI via SSE.
+
+### 8. Notifications
+
+```go
+r.sendNotification(ctx, &app, success, err)
+```
+
+Sends notifications based on the app's `notifications` config:
+
+- `onSyncSuccess` — sync completed successfully
+- `onSyncFailure` — sync failed
+- `onHealthDegraded` — health status is `Degraded`
+
+### 9. Requeue
+
+```go
+return ctrl.Result{RequeueAfter: 60 * time.Second}, nil
+```
+
+The app is requeued after 60 seconds for the next periodic check. Webhook annotations can trigger an immediate requeue.
+
+## Error Handling
+
+| Failure | Behavior |
+|---------|----------|
+| Git clone/pull fails | Status `Unknown`, `SyncError` condition, exponential backoff retry |
+| Manifest parse fails | Status `Unknown`, `SyncError` condition, no changes applied |
+| Apply fails partway | Applied resources remain, status reflects the error, retry with backoff |
+| Health check fails | Status `Degraded`, no retry (health is re-checked next loop) |
+
+<Callout type="info">
+  Apply failures never roll back already-applied resources automatically. Use [Rollback](/guides/rollback) to revert intentionally.
+</Callout>
+
+## Observing the Loop
+
+### Events
+
+```sh
+kubectl describe gitapplication my-app
+```
+
+```
+Events:
+  Normal  SyncStarted   2m   wardn-operator  Starting sync of revision a1b2c3d
+  Normal  SyncCompleted 2m   wardn-operator  Synced 12 resources
+  Warning SyncFailed    1m   wardn-operator  Failed to apply Deployment/my-app: ...
+```
+
+### Logs
+
+```sh
+kubectl logs -n wardn-system deployment/wardn-operator -f
+```
+
+### Metrics (planned)
+
+- `wardn_sync_duration_seconds` — sync duration histogram
+- `wardn_sync_total` — sync counter by result
+- `wardn_health_status` — gauge of app health
+
+## Related
+
+- [Architecture](/operator/architecture) — Operator components
+- [Sync Policies](/concepts/sync-policies) — Automation options
+- [Health Checks](/concepts/health-checks) — Health evaluation logic

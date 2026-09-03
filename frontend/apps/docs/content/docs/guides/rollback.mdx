@@ -1,0 +1,134 @@
+---
+title: Rollback
+description: Roll back applications to previous sync revisions
+---
+
+import { Steps, Step } from "fumadocs-ui/components/steps";
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Rollback
+
+Wardn tracks sync history for every application, enabling one-click rollback to a previous revision when a deployment goes wrong.
+
+## How Sync History Works
+
+Every successful sync records the Git revision in the application's status:
+
+```yaml
+status:
+  revision: "a1b2c3d4e5f6..."          # current revision
+  previousRevisions:                    # up to 10 recent revisions
+    - "f6e5d4c3b2a1..."
+    - "1234567890ab..."
+    - "fedcba098765..."
+```
+
+## Rolling Back
+
+### Via the UI
+
+1. Open the application detail page
+2. Click the **History** tab
+3. Find the revision you want to roll back to
+4. Click **Rollback** next to that revision
+5. Confirm the rollback
+
+### Via the CLI
+
+```sh
+# View available revisions
+wardn app history my-app
+
+# Rollback to a specific revision
+wardn app rollback my-app --revision 3
+```
+
+### Via the API
+
+```sh
+curl -X POST http://localhost:8080/api/v1/apps/default/my-app/rollback \
+  -H "Content-Type: application/json" \
+  -d '{ "revision": "a1b2c3d4e5f6..." }'
+```
+
+## Tutorial: Rollback a Bad Deployment
+
+<Steps>
+
+### Step 1: Identify the Problem
+
+Your latest deployment is failing health checks:
+
+```sh
+wardn app get my-app
+```
+
+```
+NAME      SYNC STATUS   HEALTH      REVISION
+my-app    Synced        Degraded    e5f6a7b8c9d0
+```
+
+### Step 2: Review Sync History
+
+```sh
+wardn app history my-app
+```
+
+```
+REVISION          SYNCED AT           STATUS
+e5f6a7b8c9d0     2024-01-15 14:32    Failed
+d4c3b2a1f0e9     2024-01-15 12:10    Healthy
+c3b2a1f0e9d8     2024-01-14 09:45    Healthy
+```
+
+### Step 3: Rollback
+
+```sh
+wardn app rollback my-app --revision d4c3b2a1f0e9
+```
+
+### Step 4: Verify Recovery
+
+```sh
+wardn app get my-app
+```
+
+```
+NAME      SYNC STATUS   HEALTH      REVISION
+my-app    Synced        Healthy     d4c3b2a1f0e9
+```
+
+</Steps>
+
+## Important Caveats
+
+<Callout type="warn">
+  **Rollback vs Git state.** Rollback re-applies manifests from a previous revision, but it does **not** change Git. If `automated` sync is enabled, the next sync will re-apply the latest Git revision, overriding your rollback.
+</Callout>
+
+### Making Rollbacks Persistent
+
+To make a rollback stick, revert the commit in Git:
+
+```sh
+git revert <bad-commit-sha>
+git push
+```
+
+This way, Git remains the source of truth and the rollback is permanent.
+
+### Rollback with Prune Enabled
+
+If `prune: true`, rolling back will also delete resources that were added in the newer revision. This is usually what you want, but be aware of it.
+
+## Limitations
+
+- **History depth** — Wardn keeps the last 10 revisions per application
+- **Manifest availability** — rollback requires the manifests from that revision to be available (Wardn caches rendered manifests in Redis)
+- **Schema changes** — if a resource schema changed between revisions, rollback may fail
+
+## Related
+
+- [Sync Policies](/concepts/sync-policies) — How sync history is maintained
+- [Diff View Guide](/guides/diff-view) — Inspect changes before syncing
+- [CLI Reference](/cli) — Full CLI command reference

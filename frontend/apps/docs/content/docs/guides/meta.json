@@ -1,0 +1,14 @@
+{
+  "title": "Guides",
+  "description": "Step-by-step tutorials for common Wardn workflows",
+  "pages": [
+    "first-app",
+    "multi-cluster",
+    "helm-charts",
+    "kustomize",
+    "rollback",
+    "diff-view",
+    "sync-waves",
+    "webhook-triggers"
+  ]
+}

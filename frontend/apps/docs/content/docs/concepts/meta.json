@@ -1,0 +1,9 @@
+{
+  "title": "Core Concepts",
+  "description": "Understand Wardn's core abstractions and how they work together",
+  "pages": [
+    "sync-policies",
+    "health-checks",
+    "manifest-management"
+  ]
+}

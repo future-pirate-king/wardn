@@ -1,0 +1,171 @@
+---
+title: Deploying Helm Charts
+description: Use Helm charts as the source of manifests for your GitApplication
+---
+
+import { Steps, Step } from "fumadocs-ui/components/steps";
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Deploying Helm Charts
+
+<Callout type="info">
+  Helm support is currently in development. This guide describes the target behavior.
+</Callout>
+
+This guide shows you how to deploy a Helm chart with Wardn — either a chart stored in your Git repository or a chart from a Helm repository.
+
+## Chart in Your Git Repository
+
+<Steps>
+
+### Step 1: Add the Chart to Your Repo
+
+```
+my-app/
+└── charts/
+    └── web/
+        ├── Chart.yaml
+        ├── values.yaml
+        └── templates/
+            ├── deployment.yaml
+            ├── service.yaml
+            └── ingress.yaml
+```
+
+**Chart.yaml**
+
+```yaml
+apiVersion: v2
+name: web
+description: A web application
+version: 0.1.0
+appVersion: "1.0"
+```
+
+**values.yaml**
+
+```yaml
+replicaCount: 2
+image:
+  repository: nginx
+  tag: "1.25"
+service:
+  type: ClusterIP
+  port: 80
+```
+
+### Step 2: Create Environment Values
+
+Create environment-specific values files:
+
+**values/production.yaml**
+
+```yaml
+replicaCount: 5
+image:
+  tag: "1.26"
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+```
+
+### Step 3: Create the GitApplication
+
+```yaml
+apiVersion: cd.wardn.space/v1alpha1
+kind: GitApplication
+metadata:
+  name: web-production
+spec:
+  repoURL: https://github.com/myorg/my-app
+  branch: main
+  path: charts/web
+  manifestType: Helm
+  helm:
+    valuesFile: values/production.yaml
+    releaseName: web
+    namespace: production
+  syncPolicy:
+    automated: true
+    prune: true
+    selfHeal: true
+```
+
+### Step 4: Apply and Verify
+
+```sh
+kubectl apply -f gitapplication.yaml
+kubectl get gitapplication web-production -w
+```
+
+</Steps>
+
+## Inline Values
+
+For quick overrides without committing a values file, use `inlineValues`:
+
+```yaml
+spec:
+  manifestType: Helm
+  helm:
+    valuesFile: values/production.yaml
+    inlineValues: |
+      replicaCount: 3
+      image:
+        tag: "1.26-alpine"
+```
+
+<Callout type="warn">
+  `inlineValues` takes precedence over `valuesFile`. Use it sparingly — values in Git are easier to audit.
+</Callout>
+
+## Values Precedence
+
+Values are merged in order (highest precedence last):
+
+1. Chart defaults (`values.yaml` in the chart)
+2. `valuesFile` from the repo
+3. `inlineValues` from the CRD spec
+
+## How Rendering Works
+
+Wardn uses the Helm Go SDK to render charts:
+
+1. **Load the chart** from the cloned repository
+2. **Merge values** — chart defaults + valuesFile + inlineValues
+3. **Render templates** — produce final Kubernetes manifests
+4. **Apply** — rendered manifests applied with server-side apply
+
+The rendered manifests are cached in Redis to avoid re-rendering on every reconciliation.
+
+## Troubleshooting
+
+### Chart Fails to Render
+
+Check the operator logs for template errors:
+
+```sh
+kubectl logs -n wardn-system deployment/wardn-operator | grep -i helm
+```
+
+Common causes:
+- Missing required values
+- Template syntax errors
+- Invalid `Chart.yaml`
+
+### Values File Not Found
+
+Verify the path is relative to the chart path:
+
+```yaml
+# If path is "charts/web" and values file is "charts/web/values/prod.yaml"
+helm:
+  valuesFile: values/prod.yaml   # relative to chart path
+```
+
+## Related
+
+- [Manifest Management](/concepts/manifest-management) — How manifest types work
+- [Configuration](/configuration) — Full Helm config reference
+- [Kustomize Guide](/guides/kustomize) — Alternative to Helm

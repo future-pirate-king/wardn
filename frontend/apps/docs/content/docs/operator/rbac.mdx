@@ -1,0 +1,140 @@
+---
+title: RBAC
+description: Project-scoped role-based access control
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# RBAC
+
+Wardn uses project-scoped RBAC. Users are assigned roles within projects, and every API request is checked against those roles.
+
+## Roles
+
+| Role | Capabilities |
+|------|-------------|
+| `read` | View apps, sync status, health, history, audit logs |
+| `sync` | All `read` + trigger syncs and rollbacks |
+| `admin` | All `sync` + manage members, delete apps, edit project settings, manage clusters and secret stores |
+
+## How It Works
+
+```
+Request ──▶ Session Middleware ──▶ Extract user
+                                        │
+                                        ▼
+                              ┌──────────────────┐
+                              │ project_users    │
+                              │ ┌──────┬───────┐ │
+                              │ │user  │ role  │ │
+                              │ ├──────┼───────┤ │
+                              │ │alice │ admin │ │
+                              │ │bob   │ sync  │ │
+                              │ └──────┴───────┘ │
+                              └──────────────────┘
+                                        │
+                                        ▼
+                              Role check (read/sync/admin)
+                                        │
+                              ┌─────────┴─────────┐
+                              ▼                   ▼
+                          Allow               403 Forbidden
+```
+
+Roles are stored in the `project_users` table:
+
+```sql
+CREATE TABLE project_users (
+    user_id    TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    role       TEXT NOT NULL CHECK (role IN ('read', 'sync', 'admin')),
+    PRIMARY KEY (user_id, project_id)
+);
+```
+
+## Enforcement Points
+
+| Endpoint | Minimum Role |
+|----------|-------------|
+| `GET /apps` | `read` (in any accessible project) |
+| `GET /apps/{ns}/{name}` | `read` |
+| `POST /apps/{ns}/{name}/sync` | `sync` |
+| `POST /apps/{ns}/{name}/rollback` | `sync` |
+| `GET /projects` | Any (returns only accessible projects) |
+| `POST /projects` | Global admin |
+| `POST /projects/{id}/members` | `admin` in that project |
+| `POST /clusters` | `admin` |
+| `DELETE /clusters/{id}` | `admin` |
+| `GET /audit` | `read` (scoped to accessible projects) |
+| `POST /secret-stores` | `admin` |
+
+## Managing Roles
+
+### Via the UI
+
+1. Go to **Settings → Projects**
+2. Select a project
+3. **Members** tab → **Add Member**
+4. Enter email and choose a role
+5. Save
+
+### Via the API
+
+```sh
+# Add a member with sync role
+curl -X POST http://localhost:8080/api/v1/projects/prj_01H8.../members \
+  -b cookies.txt \
+  -H "Content-Type: application/json" \
+  -d '{"email": "dev@example.com", "role": "sync"}'
+
+# Change a member's role
+curl -X PATCH http://localhost:8080/api/v1/projects/prj_01H8.../members/usr_01H8... \
+  -b cookies.txt \
+  -d '{"role": "admin"}'
+
+# Remove a member
+curl -X DELETE http://localhost:8080/api/v1/projects/prj_01H8.../members/usr_01H8... \
+  -b cookies.txt
+```
+
+## OIDC Group Mapping
+
+<Callout type="info">
+  OIDC group-to-role mapping is planned. It will let you map identity provider groups (e.g. `platform-team`) to Wardn roles automatically.
+</Callout>
+
+Planned configuration:
+
+```yaml
+# Server config (planned)
+oidc:
+  groupClaims:
+    - group: "platform-team"
+      role: "admin"
+    - group: "developers"
+      role: "sync"
+```
+
+## Kubernetes RBAC vs Wardn RBAC
+
+These are separate systems:
+
+| System | Controls | Managed By |
+|--------|----------|-----------|
+| Kubernetes RBAC | What the operator can do in clusters | Cluster admin |
+| Wardn RBAC | What users can do in Wardn | Wardn projects |
+
+A user with `admin` in Wardn cannot bypass Kubernetes RBAC — the operator's service account permissions are the ceiling for what any Wardn user can deploy.
+
+## Best Practices
+
+- **Principle of least privilege** — give most users `read`, CI systems `sync`, and few people `admin`
+- **One project per team/environment** — e.g. `team-alpha-staging`, `team-alpha-production`
+- **Audit role changes** — member changes are recorded in the audit log
+- **Review access quarterly** — list members per project and remove stale access
+
+## Related
+
+- [Projects API](/api/projects) — Managing members via API
+- [Authentication](/api/authentication) — Sessions and OIDC
+- [Audit API](/api/audit) — Tracking role changes

@@ -1,0 +1,238 @@
+---
+title: Authentication
+description: Register, login, logout, and session management endpoints
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Authentication API
+
+All API requests (except register/login/health) require a valid session. Sessions are Redis-backed with a 24-hour TTL and transmitted via an HTTP-only cookie.
+
+## Base URL
+
+```
+http://localhost:8080/api/v1
+```
+
+## Endpoints
+
+### Register
+
+Create a new user account.
+
+```http
+POST /api/v1/auth/register
+Content-Type: application/json
+```
+
+**Request Body**
+
+```json
+{
+  "email": "user@example.com",
+  "password": "secure-password-123",
+  "name": "John Doe"
+}
+```
+
+**Response — 201 Created**
+
+```json
+{
+  "id": "usr_01H8X2K3M4N5P6Q7R8S9T0U1V2",
+  "email": "user@example.com",
+  "name": "John Doe",
+  "createdAt": "2024-01-15T10:30:00Z"
+}
+```
+
+**Errors**
+
+| Status | Description |
+|--------|-------------|
+| `400` | Invalid email format or password too short (< 8 chars) |
+| `409` | Email already registered |
+
+**Example**
+
+```sh
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "secure-password-123",
+    "name": "John Doe"
+  }'
+```
+
+---
+
+### Login
+
+Authenticate and receive a session cookie.
+
+```http
+POST /api/v1/auth/login
+Content-Type: application/json
+```
+
+**Request Body**
+
+```json
+{
+  "email": "user@example.com",
+  "password": "secure-password-123"
+}
+```
+
+**Response — 200 OK**
+
+```json
+{
+  "id": "usr_01H8X2K3M4N5P6Q7R8S9T0U1V2",
+  "email": "user@example.com",
+  "name": "John Doe"
+}
+```
+
+The response sets an HTTP-only session cookie:
+
+```
+Set-Cookie: wardn_session=eyJhbGci...; HttpOnly; Path=/; Max-Age=86400; SameSite=Lax
+```
+
+**Errors**
+
+| Status | Description |
+|--------|-------------|
+| `401` | Invalid email or password |
+
+**Example**
+
+```sh
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -c cookies.txt \
+  -d '{
+    "email": "user@example.com",
+    "password": "secure-password-123"
+  }'
+```
+
+---
+
+### Logout
+
+Destroy the current session.
+
+```http
+POST /api/v1/auth/logout
+Cookie: wardn_session=eyJhbGci...
+```
+
+**Response — 204 No Content**
+
+**Example**
+
+```sh
+curl -X POST http://localhost:8080/api/v1/auth/logout \
+  -b cookies.txt
+```
+
+---
+
+### Get Current User
+
+Returns the authenticated user's profile.
+
+```http
+GET /api/v1/auth/me
+Cookie: wardn_session=eyJhbGci...
+```
+
+**Response — 200 OK**
+
+```json
+{
+  "id": "usr_01H8X2K3M4N5P6Q7R8S9T0U1V2",
+  "email": "user@example.com",
+  "name": "John Doe",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "projects": [
+    {
+      "id": "prj_01H8X2K3M4N5P6Q7R8S9T0U1V3",
+      "name": "production",
+      "role": "admin"
+    }
+  ]
+}
+```
+
+**Errors**
+
+| Status | Description |
+|--------|-------------|
+| `401` | Not authenticated or session expired |
+
+**Example**
+
+```sh
+curl http://localhost:8080/api/v1/auth/me \
+  -b cookies.txt
+```
+
+---
+
+### Health Check
+
+```http
+GET /api/v1/health
+```
+
+**Response — 200 OK**
+
+```json
+{
+  "status": "ok",
+  "version": "0.1.0"
+}
+```
+
+## OIDC Authentication
+
+<Callout type="info">
+  OIDC support (Google, GitHub, Keycloak) is available when `OIDC_PROVIDER_URL`, `OIDC_CLIENT_ID`, and `OIDC_CLIENT_SECRET` are configured on the server.
+</Callout>
+
+When OIDC is configured, the login flow redirects to your identity provider:
+
+1. `GET /api/v1/auth/oidc/login` — redirects to the OIDC provider
+2. User authenticates with the provider
+3. Provider redirects back to `GET /api/v1/auth/oidc/callback`
+4. Wardn validates the ID token and creates a session
+
+## Session Security
+
+- **HTTP-only cookies** — sessions can't be read by JavaScript (XSS protection)
+- **SameSite=Lax** — CSRF protection for state-changing requests
+- **24-hour TTL** — sessions expire after 24 hours of issuance
+- **Redis-backed** — sessions survive server restarts; logout revokes immediately
+- **bcrypt passwords** — local passwords hashed with bcrypt (cost 12)
+
+## Rate Limiting
+
+Auth endpoints are rate-limited to prevent brute-force attacks:
+
+| Endpoint | Limit |
+|----------|-------|
+| `POST /auth/login` | 10 requests/minute per IP |
+| `POST /auth/register` | 5 requests/minute per IP |
+
+Exceeding the limit returns `429 Too Many Requests`.
+
+## Related
+
+- [Server Overview](/server) — Server architecture and configuration
+- [RBAC](/operator/rbac) — Role-based access control
+- [Applications API](/api/applications) — Protected endpoints requiring auth

@@ -1,0 +1,137 @@
+---
+title: Sync Policies
+description: Automated sync, prune, self-heal, and manual sync workflows
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Sync Policies
+
+Sync policies control how and when Wardn reconciles your cluster state with Git. They are configured in the `syncPolicy` field of a `GitApplication`.
+
+## Sync States
+
+Every `GitApplication` has a sync status that reflects the relationship between Git and the cluster:
+
+| Status | Description |
+|--------|-------------|
+| `Synced` | Live state matches Git state |
+| `OutOfSync` | Live state differs from Git state |
+| `Syncing` | Reconciliation in progress |
+| `Unknown` | Sync state cannot be determined (e.g. git clone failed) |
+
+```
+Git Push ──▶ OutOfSync ──▶ Syncing ──▶ Synced
+                ▲                        │
+                │   drift detected       │
+                └────────────────────────┘
+```
+
+## Automated Sync
+
+When `automated: true`, the operator triggers a sync whenever it detects a new Git revision:
+
+```yaml
+spec:
+  syncPolicy:
+    automated: true
+```
+
+The operator polls the Git repository at a configurable interval (default: 60 seconds). When the revision changes, it automatically clones, parses, and applies the manifests.
+
+### Prune
+
+When `prune: true`, Wardn removes Kubernetes resources that are no longer present in Git:
+
+```yaml
+spec:
+  syncPolicy:
+    automated: true
+    prune: true
+```
+
+<Callout type="warn">
+  Pruning deletes resources that exist in the cluster but not in Git. This is powerful but dangerous — if you accidentally remove a manifest from Git, the corresponding resource will be deleted from the cluster on the next sync.
+</Callout>
+
+How pruning works:
+1. Wardn tracks all resources it has applied using labels (`managed-by: wardn`)
+2. On each sync, it compares the list of tracked resources with the current Git manifests
+3. Resources that are no longer in Git are deleted
+
+### Self-Heal
+
+When `selfHeal: true`, Wardn re-applies the desired state if someone manually edits cluster resources:
+
+```yaml
+spec:
+  syncPolicy:
+    automated: true
+    selfHeal: true
+```
+
+Without `selfHeal`, if someone runs `kubectl edit deployment my-app` and changes the replica count, Wardn will detect the drift but won't fix it. With `selfHeal`, the operator re-applies the Git state on the next reconciliation loop.
+
+### Recommended Production Configuration
+
+```yaml
+spec:
+  syncPolicy:
+    automated: true
+    prune: true
+    selfHeal: true
+```
+
+This gives you full GitOps — Git is the single source of truth, and any manual changes are automatically reverted.
+
+## Manual Sync
+
+When `automated: false` or omitted, syncs must be triggered manually:
+
+```yaml
+spec:
+  syncPolicy:
+    automated: false
+```
+
+Trigger a sync via:
+
+- **UI**: Click the "Sync" button on the app detail page
+- **CLI**: `wardn app sync my-app`
+- **API**: `POST /api/v1/apps/{namespace}/{name}/sync`
+
+Manual sync is useful for:
+- Production environments where you want explicit control over deployments
+- Pre-production environments where you want to review changes before applying
+- Compliance requirements that require audit trails for each deployment
+
+## Sync Triggers
+
+Syncs can be triggered by:
+
+| Trigger | Description |
+|---------|-------------|
+| **Git push** | New commit on the tracked branch (requires `automated: true`) |
+| **Webhook** | Git provider push event (GitHub, GitLab) |
+| **Manual** | UI button, CLI command, or API call |
+| **Self-heal** | Drift detection re-sync (requires `selfHeal: true`) |
+| **Periodic** | Operator polls Git every 60 seconds by default |
+
+## Sync History
+
+Wardn maintains sync history for each application (up to 10 revisions) in the `previousRevisions` status field. This enables rollback to previous states.
+
+```sh
+# View sync history
+wardn app history my-app
+
+# Rollback to revision 3
+wardn app rollback my-app --revision 3
+```
+
+## Related
+
+- [Configuration](/configuration) — Full GitApplication CRD spec
+- [Health Checks](/concepts/health-checks) — How Wardn evaluates health after sync
+- [Rollback Guide](/guides/rollback) — Step-by-step rollback tutorial
+- [Diff View Guide](/guides/diff-view) — Comparing live vs desired state

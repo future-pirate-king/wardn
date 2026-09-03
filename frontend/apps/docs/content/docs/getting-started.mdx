@@ -1,70 +1,197 @@
 ---
 title: Getting Started
-description: Install Wardn and deploy your first application
+description: Install Wardn and deploy your first application in minutes
 ---
 
-import { Steps } from "fumadocs-ui/components/steps";
+import { Steps, Step } from "fumadocs-ui/components/steps";
 import { Callout } from "fumadocs-ui/components/callout";
-import { CodeBlock } from "fumadocs-ui/components/codeblock";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 
 # Getting Started
 
+This guide walks you through installing Wardn, creating your first `GitApplication`, and watching it sync — end to end in under 5 minutes.
+
 ## Prerequisites
 
-- Kubernetes cluster (1.28+)
-- `kubectl` installed and configured
-- Git repository with your application manifests
+- **Kubernetes cluster** (1.28+) — or use Docker Compose for local development
+- **`kubectl`** installed and configured
+- **Git repository** with your application manifests (or use our example repo)
+- **Docker** (for Docker Compose installation)
 
 ## Installation
 
+<Tabs>
+  <Tab value="docker-compose" label="Docker Compose (Recommended)">
+
+  The fastest way to get started — brings up the full stack including Postgres, Redis, server, operator, and frontend:
+
+  ```sh
+  git clone https://github.com/future-pirate-king/wardn.git
+  cd wardn
+  docker compose up -d
+  ```
+
+  The platform dashboard is available at `http://localhost:3002`.
+
+  <Callout type="info">
+    Docker Compose is ideal for local development and testing. For production, use the Helm chart.
+  </Callout>
+
+  </Tab>
+  <Tab value="helm" label="Helm Chart">
+
+  Install Wardn on any Kubernetes cluster:
+
+  ```sh
+  helm repo add wardn https://charts.wardn.space
+  helm repo update
+  helm install wardn wardn/wardn \
+    --namespace wardn-system \
+    --create-namespace \
+    --set jwtSecret=$(openssl rand -hex 32)
+  ```
+
+  <Callout type="warn">
+    Set `jwtSecret` to a strong random value in production. Never use the default.
+  </Callout>
+
+  </Tab>
+  <Tab value="manual" label="Manual (Development)">
+
+  For development without Docker:
+
+  ```sh
+  # Start Postgres and Redis
+  docker run -d --name wardn-pg -p 5432:5432 \
+    -e POSTGRES_USER=wardn -e POSTGRES_PASSWORD=wardn -e POSTGRES_DB=wardn \
+    postgres:18-alpine
+
+  docker run -d --name wardn-redis -p 6379:6379 redis:8-alpine
+
+  # Start the server
+  cd server
+  export JWT_SECRET="dev-secret"
+  export POSTGRES_URL="postgres://wardn:wardn@localhost:5432/wardn?sslmode=disable"
+  export REDIS_URL="redis://localhost:6379/0"
+  go run ./cmd/server
+
+  # In another terminal, start the operator
+  cd operator
+  go run ./cmd/operator
+
+  # In another terminal, start the frontend
+  cd frontend
+  pnpm dev
+  ```
+
+  </Tab>
+</Tabs>
+
+## Your First Deployment
+
 <Steps>
 
-### Install the Wardn Operator
+### Step 1: Verify Installation
 
-Apply the Wardn operator manifest to your cluster:
+Check that all Wardn components are running:
 
-```bash
-kubectl apply -f https://github.com/wardn/wardn/releases/latest/download/operator.yaml
-```
-
-### Verify Installation
-
-Check that the operator is running:
-
-```bash
+```sh
 kubectl get pods -n wardn-system
 ```
 
-### Create a GitApplication
+Expected output:
 
-Create your first `GitApplication` custom resource:
-
-```yaml
-apiVersion: wardn.io/v1alpha1
-kind: GitApplication
-metadata:
-  name: my-app
-  namespace: default
-spec:
-  repoURL: https://github.com/myorg/my-app
-  path: manifests
-  targetRevision: main
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+```
+NAME                               READY   STATUS    RESTARTS   AGE
+wardn-server-7d6f8c5b-x2k9m       1/1     Running   0          2m
+wardn-operator-76d4f9b8c-p3rlq    1/1     Running   0          2m
+wardn-frontend-65f8d7c4b-n8w2x    1/1     Running   0          2m
 ```
 
-### Apply and Watch
+### Step 2: Access the Dashboard
 
-```bash
-kubectl apply -f gitapplication.yaml
+Open `http://localhost:3002` in your browser. Create an account or log in with an existing one.
+
+### Step 3: Create a GitApplication
+
+You can create a `GitApplication` via the UI wizard or via kubectl:
+
+<Tabs>
+  <Tab value="kubectl" label="kubectl">
+
+  ```yaml
+  apiVersion: cd.wardn.space/v1alpha1
+  kind: GitApplication
+  metadata:
+    name: my-app
+    namespace: default
+  spec:
+    repoURL: https://github.com/myorg/my-app
+    branch: main
+    path: manifests
+    manifestType: Raw
+    syncPolicy:
+      automated: true
+      prune: true
+      selfHeal: true
+  ```
+
+  ```sh
+  kubectl apply -f gitapplication.yaml
+  ```
+
+  </Tab>
+  <Tab value="ui" label="UI Wizard">
+
+  1. Click **New Application** in the dashboard
+  2. **Step 1** — Enter repository URL and branch
+  3. **Step 2** — Select manifest path and type (Raw / Helm)
+  4. **Step 3** — Choose target cluster
+  5. **Step 4** — Configure sync policy (automated, prune, self-heal)
+  6. **Step 5** — Configure secrets (optional)
+  7. Click **Create**
+
+  </Tab>
+</Tabs>
+
+### Step 4: Watch the Sync
+
+```sh
 kubectl get gitapplication my-app -w
+```
+
+The application will transition through sync states:
+
+```
+NAME     SYNC STATUS   HEALTH    REVISION
+my-app   Syncing       Unknown   abc1234
+my-app   Synced        Healthy   abc1234
+```
+
+### Step 5: Verify Resources
+
+Check that your manifests were applied:
+
+```sh
+kubectl get all -n default
 ```
 
 </Steps>
 
+## Understanding What Happened
+
+1. The **Operator** detected the new `GitApplication` CRD
+2. It cloned the Git repository and parsed manifests from the specified path
+3. Manifests were applied to the cluster using **server-side apply**
+4. **Health checks** ran against the deployed resources
+5. Status was written back to the `GitApplication` CRD
+6. The **Server** picked up the status change via Redis pub/sub
+7. The **Dashboard** updated in real-time via SSE
+
 ## Next Steps
 
-- [Configuration](/configuration) — Explore advanced sync policies and health checks
-- [CLI Reference](/cli) — Install the `wardn` CLI for managing applications
+- [Configuration](/configuration) — Explore the full GitApplication CRD spec
+- [Sync Policies](/concepts/sync-policies) — Learn about automated sync, prune, and self-heal
+- [Health Checks](/concepts/health-checks) — Understand how Wardn determines resource health
+- [Creating Your First App (Guide)](/guides/first-app) — A deeper tutorial with a sample repo
+- [Secret Management](/secrets/overview) — Set up SOPS, ESO, or Vault integration

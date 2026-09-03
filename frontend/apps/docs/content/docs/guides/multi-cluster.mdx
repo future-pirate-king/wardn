@@ -1,0 +1,234 @@
+---
+title: Multi-Cluster Deployment
+description: Deploy applications across multiple Kubernetes clusters from a single control plane
+---
+
+import { Steps, Step } from "fumadocs-ui/components/steps";
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Multi-Cluster Deployment
+
+Wardn supports deploying applications to remote Kubernetes clusters from a single control plane. This guide walks you through registering a remote cluster and deploying to it.
+
+## How It Works
+
+```
+┌─────────────────────┐
+│   Wardn Control     │
+│   Plane (operator)  │
+└─────────┬───────────┘
+          │
+    ┌─────┴─────┐
+    │           │
+    ▼           ▼
+┌────────┐  ┌────────┐
+│ Local  │  │ Remote │
+│Cluster │  │Cluster │
+│(in-    │  │(staging│
+│cluster)│  │ prod)  │
+└────────┘  └────────┘
+```
+
+The operator uses a Kubernetes client configured with the remote cluster's credentials. The `targetCluster` field in the `GitApplication` spec determines which cluster to deploy to.
+
+## Registering a Remote Cluster
+
+### Via the UI
+
+1. Navigate to **Settings → Clusters**
+2. Click **Add Cluster**
+3. Provide:
+   - **Name** — a unique identifier (e.g. `staging`, `production`)
+   - **API Server URL** — e.g. `https://staging.example.com:6443`
+   - **Credentials** — paste the kubeconfig or upload a service account token
+4. Click **Test Connection** to verify
+5. Click **Save**
+
+### Via the CLI
+
+```sh
+wardn cluster add \
+  --name staging \
+  --kubeconfig ~/.kube/staging-config
+```
+
+Or with explicit server URL and token:
+
+```sh
+wardn cluster add \
+  --name production \
+  --server https://prod.example.com:6443 \
+  --token eyJhbGciOiJSUzI1NiIs...
+```
+
+### Via the API
+
+```sh
+curl -X POST http://localhost:8080/api/v1/clusters \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "staging",
+    "server": "https://staging.example.com:6443",
+    "credentials": "eyJhbGciOiJSUzI1NiIs..."
+  }'
+```
+
+## Deploying to a Remote Cluster
+
+Set the `targetCluster` field in your `GitApplication`:
+
+```yaml
+apiVersion: cd.wardn.space/v1alpha1
+kind: GitApplication
+metadata:
+  name: my-app-staging
+  namespace: default
+spec:
+  repoURL: https://github.com/myorg/my-app
+  branch: main
+  path: manifests
+  targetCluster: staging    # ← registered cluster name
+  syncPolicy:
+    automated: true
+    prune: true
+    selfHeal: true
+```
+
+<Callout type="info">
+  When `targetCluster` is empty or omitted, the application deploys to the local (in-cluster) cluster where the operator runs.
+</Callout>
+
+## Tutorial: Staging + Production
+
+<Steps>
+
+### Step 1: Register Both Clusters
+
+```sh
+wardn cluster add --name staging --kubeconfig ~/.kube/staging
+wardn cluster add --name production --kubeconfig ~/.kube/production
+```
+
+Verify:
+
+```sh
+wardn cluster list
+```
+
+```
+NAME          SERVER                              STATUS
+staging       https://staging.example.com:6443    Connected
+production    https://prod.example.com:6443       Connected
+```
+
+### Step 2: Create Environment-Specific Applications
+
+Create one `GitApplication` per environment, pointing to different paths or branches:
+
+**staging.yaml**
+
+```yaml
+apiVersion: cd.wardn.space/v1alpha1
+kind: GitApplication
+metadata:
+  name: my-app-staging
+spec:
+  repoURL: https://github.com/myorg/my-app
+  branch: main
+  path: overlays/staging
+  targetCluster: staging
+  syncPolicy:
+    automated: true
+    prune: true
+    selfHeal: true
+```
+
+**production.yaml**
+
+```yaml
+apiVersion: cd.wardn.space/v1alpha1
+kind: GitApplication
+metadata:
+  name: my-app-production
+spec:
+  repoURL: https://github.com/myorg/my-app
+  branch: main
+  path: overlays/production
+  targetCluster: production
+  syncPolicy:
+    automated: true
+    prune: true
+    selfHeal: true
+```
+
+Apply both:
+
+```sh
+kubectl apply -f staging.yaml -f production.yaml
+```
+
+### Step 3: Promote Between Environments
+
+With this setup, promoting from staging to production is a Git commit:
+
+```sh
+# Update the production overlay with the new image tag
+cd my-app
+vim overlays/production/kustomization.yaml
+# Change: newTag: v1.2.3 → newTag: v1.2.4
+
+git add overlays/production/
+git commit -m "Promote v1.2.4 to production"
+git push
+```
+
+Both environments sync independently — staging gets changes immediately, production only when you update its overlay.
+
+</Steps>
+
+## Security Considerations
+
+- **Least privilege** — the service account used for remote clusters should only have access to the namespaces Wardn manages
+- **Network policies** — restrict network access between the control plane and remote clusters
+- **Credential rotation** — rotate cluster credentials regularly
+- **Audit logging** — all cross-cluster operations are logged in the audit log
+
+## Troubleshooting
+
+### Cluster Shows `Disconnected`
+
+```sh
+# Test connectivity from the operator pod
+kubectl exec -n wardn-system deployment/wardn-operator -- \
+  wget -qO- https://staging.example.com:6443/healthz
+```
+
+Common causes:
+- Firewall blocking the API server port
+- Expired credentials
+- DNS resolution failure
+
+### Sync Fails with RBAC Errors
+
+The service account on the remote cluster needs permissions to create/update resources:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: wardn-deployer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edit
+subjects:
+  - kind: ServiceAccount
+    name: wardn
+    namespace: wardn-system
+```
+
+## Related
+
+- [Clusters API](/api/clusters) — REST API for cluster management
+- [Configuration](/configuration) — GitApplication CRD spec
+- [First App Guide](/guides/first-app) — Basic deployment tutorial

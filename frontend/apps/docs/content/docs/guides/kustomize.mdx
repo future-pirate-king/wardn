@@ -1,0 +1,122 @@
+---
+title: Using Kustomize
+description: Deploy Kustomize overlays with Wardn
+---
+
+import { Steps, Step } from "fumadocs-ui/components/steps";
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Using Kustomize
+
+<Callout type="info">
+  Kustomize support is planned for Phase 2. This guide describes the target behavior.
+</Callout>
+
+Kustomize lets you customize raw YAML manifests without templates. Wardn will render Kustomize overlays using `sigs.k8s.io/kustomize` before applying them.
+
+## Repo Structure
+
+A typical Kustomize setup with base + overlays:
+
+```
+my-app/
+├── base/
+│   ├── kustomization.yaml
+│   ├── deployment.yaml
+│   └── service.yaml
+└── overlays/
+    ├── staging/
+    │   └── kustomization.yaml
+    └── production/
+        ├── kustomization.yaml
+        └── replica-patch.yaml
+```
+
+**base/kustomization.yaml**
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+commonLabels:
+  app: my-app
+```
+
+**overlays/production/kustomization.yaml**
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+patches:
+  - path: replica-patch.yaml
+images:
+  - name: myapp
+    newTag: v1.2.4
+```
+
+**overlays/production/replica-patch.yaml**
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+spec:
+  replicas: 5
+```
+
+## GitApplication Configuration
+
+Point the `path` at the overlay directory:
+
+```yaml
+apiVersion: cd.wardn.space/v1alpha1
+kind: GitApplication
+metadata:
+  name: my-app-production
+spec:
+  repoURL: https://github.com/myorg/my-app
+  branch: main
+  path: overlays/production
+  manifestType: Kustomize
+  syncPolicy:
+    automated: true
+    prune: true
+    selfHeal: true
+```
+
+Wardn detects the `kustomization.yaml` in the path and renders the full overlay (including base resources).
+
+## Image Tags and Promotion
+
+A common pattern is promoting images between environments by updating the image tag in the overlay:
+
+```sh
+cd overlays/production
+kustomize edit set image myapp=myapp:v1.2.5
+git add kustomization.yaml
+git commit -m "Promote v1.2.5 to production"
+git push
+```
+
+Wardn will detect the change and sync the new image tag to the production cluster.
+
+## Kustomize vs Helm
+
+| Aspect | Kustomize | Helm |
+|--------|-----------|------|
+| Templating | None (patches) | Go templates |
+| Learning curve | Lower | Higher |
+| Values management | Patches and overlays | values.yaml files |
+| Package distribution | Git only | Helm repositories |
+| Best for | Simple customizations | Complex, parameterized apps |
+
+## Related
+
+- [Manifest Management](/concepts/manifest-management) — How manifest types work
+- [Helm Charts Guide](/guides/helm-charts) — Alternative approach
+- [Multi-Cluster Guide](/guides/multi-cluster) — Environment promotion patterns

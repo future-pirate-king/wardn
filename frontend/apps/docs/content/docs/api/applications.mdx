@@ -1,0 +1,281 @@
+---
+title: Applications
+description: List, inspect, sync, and roll back GitApplications via the REST API
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Applications API
+
+Manage `GitApplication` resources — list, inspect, trigger syncs, view history, and roll back.
+
+All endpoints require authentication (session cookie). Sync endpoints additionally require the `sync` role in the app's project.
+
+## Endpoints
+
+### List Applications
+
+```http
+GET /api/v1/apps
+```
+
+**Query Parameters**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `namespace` | string | Filter by namespace |
+| `project` | string | Filter by project |
+| `syncStatus` | string | Filter: `Synced`, `OutOfSync`, `Syncing`, `Unknown` |
+| `healthStatus` | string | Filter: `Healthy`, `Degraded`, `Progressing`, `Missing`, `Unknown` |
+
+**Response — 200 OK**
+
+```json
+{
+  "items": [
+    {
+      "namespace": "default",
+      "name": "my-app",
+      "spec": {
+        "repoURL": "https://github.com/myorg/my-app",
+        "branch": "main",
+        "path": "manifests",
+        "manifestType": "Raw"
+      },
+      "status": {
+        "syncStatus": "Synced",
+        "healthStatus": "Healthy",
+        "revision": "a1b2c3d4e5f6",
+        "lastSyncAt": "2024-01-15T10:30:00Z"
+      }
+    }
+  ],
+  "total": 1
+}
+```
+
+**Example**
+
+```sh
+curl http://localhost:8080/api/v1/apps -b cookies.txt
+```
+
+---
+
+### Get Application
+
+```http
+GET /api/v1/apps/{namespace}/{name}
+```
+
+**Response — 200 OK**
+
+```json
+{
+  "namespace": "default",
+  "name": "my-app",
+  "spec": {
+    "repoURL": "https://github.com/myorg/my-app",
+    "branch": "main",
+    "path": "manifests",
+    "manifestType": "Raw",
+    "syncPolicy": {
+      "automated": true,
+      "prune": true,
+      "selfHeal": true
+    }
+  },
+  "status": {
+    "syncStatus": "Synced",
+    "healthStatus": "Healthy",
+    "revision": "a1b2c3d4e5f6",
+    "lastSyncAt": "2024-01-15T10:30:00Z",
+    "previousRevisions": ["f6e5d4c3b2a1", "1234567890ab"],
+    "resources": [
+      {
+        "kind": "Deployment",
+        "name": "my-app",
+        "syncStatus": "Synced",
+        "healthStatus": "Healthy"
+      },
+      {
+        "kind": "Service",
+        "name": "my-app",
+        "syncStatus": "Synced",
+        "healthStatus": "Healthy"
+      }
+    ],
+    "conditions": []
+  }
+}
+```
+
+**Errors**
+
+| Status | Description |
+|--------|-------------|
+| `404` | Application not found |
+
+---
+
+### Trigger Sync
+
+```http
+POST /api/v1/apps/{namespace}/{name}/sync
+```
+
+Requires the `sync` role.
+
+**Request Body (optional)**
+
+```json
+{
+  "revision": "a1b2c3d4e5f6",
+  "dryRun": false,
+  "force": false
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `revision` | string | Sync a specific revision (default: latest) |
+| `dryRun` | bool | Perform a dry-run without applying |
+| `force` | bool | Force sync even if already synced |
+
+**Response — 202 Accepted**
+
+```json
+{
+  "message": "Sync triggered",
+  "namespace": "default",
+  "name": "my-app",
+  "revision": "a1b2c3d4e5f6"
+}
+```
+
+**Errors**
+
+| Status | Description |
+|--------|-------------|
+| `403` | Insufficient permissions (requires `sync` role) |
+| `404` | Application not found |
+| `409` | Sync already in progress |
+
+**Example**
+
+```sh
+curl -X POST http://localhost:8080/api/v1/apps/default/my-app/sync \
+  -b cookies.txt \
+  -H "Content-Type: application/json" \
+  -d '{"force": true}'
+```
+
+---
+
+### Get Sync History
+
+```http
+GET /api/v1/apps/{namespace}/{name}/history
+```
+
+**Response — 200 OK**
+
+```json
+{
+  "items": [
+    {
+      "revision": "a1b2c3d4e5f6",
+      "syncedAt": "2024-01-15T10:30:00Z",
+      "status": "Success",
+      "initiatedBy": "automated",
+      "duration": "12s"
+    },
+    {
+      "revision": "f6e5d4c3b2a1",
+      "syncedAt": "2024-01-15T08:15:00Z",
+      "status": "Success",
+      "initiatedBy": "user:usr_01H8X2K3",
+      "duration": "9s"
+    }
+  ]
+}
+```
+
+---
+
+### Rollback
+
+```http
+POST /api/v1/apps/{namespace}/{name}/rollback
+```
+
+Requires the `sync` role.
+
+**Request Body**
+
+```json
+{
+  "revision": "f6e5d4c3b2a1"
+}
+```
+
+**Response — 202 Accepted**
+
+```json
+{
+  "message": "Rollback triggered",
+  "namespace": "default",
+  "name": "my-app",
+  "revision": "f6e5d4c3b2a1"
+}
+```
+
+---
+
+### Get Diff
+
+```http
+GET /api/v1/apps/{namespace}/{name}/diff
+```
+
+**Response — 200 OK**
+
+```json
+{
+  "hasDiff": true,
+  "resources": [
+    {
+      "kind": "Deployment",
+      "name": "my-app",
+      "diff": "--- live\n+++ git\n@@ -1,7 +1,7 @@\n-          image: myapp:v1.2.3\n+          image: myapp:v1.2.4"
+    }
+  ]
+}
+```
+
+## Real-Time Updates (SSE)
+
+Subscribe to live status updates via Server-Sent Events:
+
+```http
+GET /api/v1/apps/{namespace}/{name}/events
+Accept: text/event-stream
+```
+
+**Event Stream**
+
+```
+event: status
+data: {"syncStatus":"Syncing","healthStatus":"Unknown"}
+
+event: status
+data: {"syncStatus":"Synced","healthStatus":"Healthy","revision":"a1b2c3d4e5f6"}
+```
+
+Status changes are published via Redis pub/sub and streamed to connected clients.
+
+## Related
+
+- [Configuration](/configuration) — GitApplication CRD spec
+- [Authentication API](/api/authentication) — How to authenticate
+- [Sync Policies](/concepts/sync-policies) — Sync behavior

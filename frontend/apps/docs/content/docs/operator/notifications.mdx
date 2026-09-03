@@ -1,0 +1,127 @@
+---
+title: Notifications
+description: Slack, Teams, and Email notifications for sync and health events
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Notifications
+
+Wardn sends notifications when syncs complete, fail, or application health degrades. Configure them per-application in the `notifications` spec field.
+
+## Supported Channels
+
+| Channel | Status |
+|---------|--------|
+| Slack | ✅ Supported |
+| Microsoft Teams | 📋 Planned |
+| Email (SMTP) | 📋 Planned |
+| Discord | 📋 Planned |
+| Generic webhook | 📋 Planned |
+
+## Configuration
+
+```yaml
+spec:
+  notifications:
+    slack:
+      webhookURL: https://hooks.slack.com/services/T000/B000/XXX
+    onSyncSuccess: true
+    onSyncFailure: true
+    onHealthDegraded: true
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `slack.webhookURL` | — | Slack incoming webhook URL |
+| `onSyncSuccess` | `false` | Notify on successful sync |
+| `onSyncFailure` | `true` | Notify on failed sync |
+| `onHealthDegraded` | `true` | Notify when health becomes `Degraded` |
+
+## Creating a Slack Webhook
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **Create New App**
+2. Choose **From scratch**, name it "Wardn"
+3. Add the **Incoming Webhooks** feature
+4. Activate incoming webhooks and **Add New Webhook to Workspace**
+5. Select the channel (e.g. `#deployments`)
+6. Copy the webhook URL into your `GitApplication` spec
+
+## Message Format
+
+### Sync Success
+
+```
+✅ Sync Successful
+
+Application: my-app (default)
+Revision: a1b2c3d — "Upgrade nginx to 1.26"
+Duration: 12s
+Health: Healthy
+```
+
+### Sync Failure
+
+```
+❌ Sync Failed
+
+Application: my-app (default)
+Revision: e5f6a7b — "Add new feature"
+Error: Failed to apply Deployment/my-app: admission webhook denied
+```
+
+### Health Degraded
+
+```
+⚠️ Health Degraded
+
+Application: my-app (default)
+Status: Degraded
+Resources:
+  - Deployment/my-app: Degraded (1/3 replicas ready)
+```
+
+## Notification Flow
+
+```
+Reconcile loop
+    │
+    ├─ Sync completed ──┐
+    ├─ Sync failed ─────┼──▶ Check config flags ──▶ Send via channel(s)
+    └─ Health degraded ─┘
+```
+
+Notifications are sent asynchronously — a slow notification provider never blocks reconciliation.
+
+## Failure Handling
+
+- **Provider down** — notification failures are logged but don't affect sync status
+- **Retry** — failed notifications are retried up to 3 times with backoff
+- **Timeout** — 10-second timeout per notification
+
+## Security
+
+- **Webhook URLs are secrets** — store them in Kubernetes Secrets and reference via `secretRef` (planned enhancement)
+- **No sensitive data** — notifications contain app names, revisions, and errors, never secret values
+- **Rate limiting** — repeated failures don't spam; identical notifications are deduplicated within 5 minutes
+
+## Future: Notification Templates
+
+Planned: customizable message templates per channel:
+
+```yaml
+spec:
+  notifications:
+    slack:
+      webhookURL: ...
+      template: |
+        {{if eq .Status "success"}}✅{{else}}❌{{end}} {{.AppName}}
+        Revision: {{.Revision}}
+        {{.Message}}
+```
+
+## Related
+
+- [Configuration](/configuration) — `notifications` spec fields
+- [Reconciliation Loop](/operator/reconciliation) — When notifications fire
+- [Roadmap](/reference/roadmap) — Upcoming channels

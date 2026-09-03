@@ -1,0 +1,125 @@
+---
+title: Architecture
+description: How the Wardn operator works — components, dependencies, and design
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Operator Architecture
+
+The operator is the heart of Wardn — a Kubernetes controller built with [controller-runtime](https://github.com/kubernetes-sigs/controller-runtime) that watches `GitApplication` resources and reconciles cluster state with Git.
+
+## Component Topology
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Operator Pod                          │
+│                                                          │
+│  ┌──────────────┐   ┌──────────────┐   ┌─────────────┐ │
+│  │  Git Client  │   │   Manifest   │   │   Health    │ │
+│  │ (clone/pull) │──▶│   Parser     │──▶│   Checker   │ │
+│  └──────────────┘   │ (raw/helm)   │   │             │ │
+│                     └──────────────┘   └─────────────┘ │
+│  ┌──────────────┐   ┌──────────────┐   ┌─────────────┐ │
+│  │   Applier    │   │  Notifier    │   │   Webhook   │ │
+│  │ (server-side │   │ (slack/etc)  │   │  Receiver   │ │
+│  │   apply)     │   │              │   │   (:8082)   │ │
+│  └──────────────┘   └──────────────┘   └─────────────┘ │
+└─────────────────────────────────────────────────────────┘
+         │                    │                  ▲
+         ▼                    ▼                  │
+   ┌──────────┐        ┌──────────┐       ┌──────────┐
+   │ K8s API  │        │  Slack / │       │  GitHub/ │
+   │ (target) │        │  Teams   │       │  GitLab  │
+   └──────────┘        └──────────┘       └──────────┘
+```
+
+## Core Dependencies
+
+| Component | Library | Purpose |
+|-----------|---------|---------|
+| Controller runtime | `sigs.k8s.io/controller-runtime` | Reconciliation framework |
+| Git operations | `go-git/go-git/v5` | Clone, pull, revision tracking |
+| Manifest parsing | `k8s.io/apimachinery` + Helm SDK | YAML/JSON/Helm rendering |
+| Apply | `k8s.io/cli-runtime` (SSA) | Server-side apply |
+| Health checks | `k8s.io/client-go` | Resource status inspection |
+| Notifications | HTTP clients | Slack, Teams, Email webhooks |
+
+## Reconciler Registration
+
+The reconciler is registered with its dependencies in `cmd/operator/main.go`:
+
+```go
+err = (&controller.GitApplicationReconciler{
+    Client:       mgr.GetClient(),
+    Scheme:       mgr.GetScheme(),
+    GitClient:    git.NewClient(),
+    Parser:       manifest.NewParser(),
+    HealthChecker: health.NewChecker(mgr.GetClient()),
+    Notifier:     notify.NewNotifier(),
+    Recorder:     mgr.GetEventRecorderFor("gitapplication-controller"),
+}).SetupWithManager(mgr)
+```
+
+## Webhook Server
+
+A separate HTTP server runs alongside the controller for Git provider webhooks:
+
+- **Port**: `8082` (configurable)
+- **Endpoints**: `/webhook/github`, `/webhook/gitlab`
+- **Behavior**: validates payloads, matches `GitApplication`s, annotates them to trigger reconciliation
+
+See [Webhooks](/operator/webhooks) for details.
+
+## Leader Election
+
+For high availability, the operator supports leader election. Only the leader reconciles; standby operators wait:
+
+```yaml
+# Helm values
+operator:
+  replicaCount: 2
+  leaderElection:
+    enabled: true
+```
+
+## Resource Requirements
+
+| Resource | Request | Limit |
+|----------|---------|-------|
+| CPU | 100m | 500m |
+| Memory | 128Mi | 512Mi |
+
+Git repository clones are cached in an ephemeral volume (`emptyDir`). Large monorepos may need more memory.
+
+## RBAC Requirements
+
+The operator's service account needs:
+
+```yaml
+rules:
+  - apiGroups: ["cd.wardn.space"]
+    resources: ["gitapplications"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: ["cd.wardn.space"]
+    resources: ["gitapplications/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # The last rule is needed to apply user manifests.
+  # Scope it down in production to specific apiGroups/resources.
+```
+
+## Design Principles
+
+1. **Idempotent** — reconciliation can run any number of times safely
+2. **Level-triggered** — state is derived from current observations, not events
+3. **Observable** — every sync decision is visible in status, events, and logs
+4. **Fail-safe** — sync errors never leave the cluster in a partially-applied state without status reflection
+
+## Related
+
+- [Reconciliation Loop](/operator/reconciliation) — Step-by-step sync flow
+- [CRD Reference](/operator/crd-reference) — GitApplication types
+- [Webhooks](/operator/webhooks) — Git provider integration

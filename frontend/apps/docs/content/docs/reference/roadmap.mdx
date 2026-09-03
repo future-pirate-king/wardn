@@ -1,0 +1,137 @@
+---
+title: Roadmap
+description: What's shipped, in progress, and planned for Wardn
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Roadmap
+
+Wardn is under active development. This page tracks what's done, what's being built, and what's next.
+
+## ✅ Completed (Phase 1 — MVP)
+
+### Operator
+
+- GitApplication CRD with full spec/status
+- Git clone/pull with revision tracking
+- Raw YAML/JSON manifest parsing
+- Server-side apply with field manager
+- Pruning and self-heal
+- Health checks (Deployment, StatefulSet, Service, Job, CRDs)
+- Status conditions and per-resource status
+- Multi-cluster targeting
+- GitHub webhook receiver
+- Slack notifications
+
+### Server
+
+- REST API (apps, projects, clusters, audit)
+- Local auth (bcrypt) + session management
+- Project-scoped RBAC (read/sync/admin)
+- Audit logging
+- Redis caching and pub/sub
+- SSE for real-time updates
+
+### Frontend
+
+- Dashboard with app list and health badges
+- App detail with resource tree, sync status, history
+- App creation wizard
+- Login/register flows
+- Real-time status updates
+- Secret stores management UI
+- Cluster management UI
+
+## 🚧 In Progress (Phase 2)
+
+### Helm Support
+
+- Helm chart rendering via Helm Go SDK
+- Values file and inline values
+- Release management
+
+### Kustomize Support
+
+- Overlay rendering via `sigs.k8s.io/kustomize`
+- Image tag overrides
+
+### Sync Waves & Hooks
+
+- Wave annotations for resource ordering
+- PreSync/Sync/PostSync/SyncFail hooks
+- Hook delete policies
+
+### GitLab Webhooks
+
+- Full GitLab push event parsing
+- Signature validation
+
+### Diff Engine
+
+- Live vs desired diff computation
+- `ignoreDifferences` with JSON pointers
+
+## 📋 Planned (Phase 3+)
+
+### Secrets
+
+- Vault direct integration
+- SOPS secretRef for webhook URLs
+- Secret rotation helpers
+
+### Notifications
+
+- Microsoft Teams channel
+- Email (SMTP) channel
+- Discord channel
+- Generic webhook channel
+- Custom message templates
+
+### Platform
+
+- OIDC group-to-role mapping
+- API tokens for CI/CD (long-lived, scoped)
+- ApplicationSets (multi-app from a single spec)
+- ArgoCD migration tooling
+- Prometheus metrics endpoint
+- OpenTelemetry tracing
+
+### CLI
+
+- `wardn app create/delete` commands
+- `wardn project` commands
+- Plugin system
+
+### UI
+
+- Resource-level diff viewer
+- Log streaming from pods
+- Terminal access (exec)
+- Dark/light theme polish
+- Mobile-responsive layout
+
+## Versioning
+
+Wardn follows [Semantic Versioning](https://semver.org):
+
+- **Patch** (0.1.x) — bug fixes
+- **Minor** (0.x.0) — new features, backwards compatible
+- **Major** (x.0.0) — breaking changes (CRD schema, API)
+
+<Callout type="info">
+  During 0.x, CRD schema changes may occur between minor versions. Pin versions in production and read release notes before upgrading.
+</Callout>
+
+## Contributing
+
+Feature requests and contributions are welcome:
+
+- [GitHub Issues](https://github.com/future-pirate-king/wardn/issues) — bug reports and feature requests
+- [GitHub Discussions](https://github.com/future-pirate-king/wardn/discussions) — design discussions
+- [CONTRIBUTING.md](https://github.com/future-pirate-king/wardn/blob/main/CONTRIBUTING.md) — contribution guide
+
+## Related
+
+- [Comparison](/reference/comparison) — Wardn vs ArgoCD vs Flux
+- [Architecture](/operator/architecture) — How it all fits together

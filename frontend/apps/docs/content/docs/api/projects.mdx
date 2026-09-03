@@ -1,0 +1,237 @@
+---
+title: Projects
+description: Create and manage projects — the RBAC boundary in Wardn
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Projects API
+
+Projects are the RBAC boundary in Wardn. Applications belong to projects, and users are granted roles per project.
+
+## Endpoints
+
+### List Projects
+
+```http
+GET /api/v1/projects
+```
+
+Returns projects the authenticated user has access to.
+
+**Response — 200 OK**
+
+```json
+{
+  "items": [
+    {
+      "id": "prj_01H8X2K3M4N5P6Q7R8S9T0U1V3",
+      "name": "production",
+      "description": "Production applications",
+      "createdAt": "2024-01-10T09:00:00Z",
+      "role": "admin",
+      "members": 3,
+      "apps": 12
+    },
+    {
+      "id": "prj_01H8X2K3M4N5P6Q7R8S9T0U1V4",
+      "name": "staging",
+      "description": "Staging environment",
+      "createdAt": "2024-01-11T14:00:00Z",
+      "role": "sync",
+      "members": 5,
+      "apps": 8
+    }
+  ]
+}
+```
+
+---
+
+### Create Project
+
+```http
+POST /api/v1/projects
+```
+
+Requires global admin privileges (first user) or project admin in the parent scope.
+
+**Request Body**
+
+```json
+{
+  "name": "production",
+  "description": "Production applications",
+  "allowedClusters": ["prod-cluster-1", "prod-cluster-2"],
+  "allowedRepositories": ["https://github.com/myorg/*"]
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Unique project name (lowercase, alphanumeric, dashes) |
+| `description` | string | No | Human-readable description |
+| `allowedClusters` | string[] | No | Cluster names apps in this project may target |
+| `allowedRepositories` | string[] | No | Glob patterns for allowed repo URLs |
+
+**Response — 201 Created**
+
+```json
+{
+  "id": "prj_01H8X2K3M4N5P6Q7R8S9T0U1V3",
+  "name": "production",
+  "description": "Production applications",
+  "createdAt": "2024-01-15T10:30:00Z"
+}
+```
+
+**Errors**
+
+| Status | Description |
+|--------|-------------|
+| `400` | Invalid name (must be lowercase alphanumeric + dashes) |
+| `403` | Insufficient permissions |
+| `409` | Project name already exists |
+
+---
+
+### Get Project
+
+```http
+GET /api/v1/projects/{id}
+```
+
+**Response — 200 OK**
+
+```json
+{
+  "id": "prj_01H8X2K3M4N5P6Q7R8S9T0U1V3",
+  "name": "production",
+  "description": "Production applications",
+  "createdAt": "2024-01-10T09:00:00Z",
+  "allowedClusters": ["prod-cluster-1"],
+  "allowedRepositories": ["https://github.com/myorg/*"],
+  "members": [
+    {
+      "userId": "usr_01H8X2K3M4N5P6Q7R8S9T0U1V2",
+      "email": "alice@example.com",
+      "role": "admin"
+    },
+    {
+      "userId": "usr_01H8X2K3M4N5P6Q7R8S9T0U1V5",
+      "email": "bob@example.com",
+      "role": "sync"
+    }
+  ]
+}
+```
+
+**Errors**
+
+| Status | Description |
+|--------|-------------|
+| `403` | Not a member of this project |
+| `404` | Project not found |
+
+---
+
+### Add Project Member
+
+```http
+POST /api/v1/projects/{id}/members
+```
+
+Requires the `admin` role in the project.
+
+**Request Body**
+
+```json
+{
+  "email": "bob@example.com",
+  "role": "sync"
+}
+```
+
+**Response — 201 Created**
+
+```json
+{
+  "userId": "usr_01H8X2K3M4N5P6Q7R8S9T0U1V5",
+  "email": "bob@example.com",
+  "role": "sync"
+}
+```
+
+---
+
+### Remove Project Member
+
+```http
+DELETE /api/v1/projects/{id}/members/{userId}
+```
+
+Requires the `admin` role in the project.
+
+**Response — 204 No Content**
+
+---
+
+### Update Member Role
+
+```http
+PATCH /api/v1/projects/{id}/members/{userId}
+```
+
+**Request Body**
+
+```json
+{
+  "role": "admin"
+}
+```
+
+**Response — 200 OK**
+
+```json
+{
+  "userId": "usr_01H8X2K3M4N5P6Q7R8S9T0U1V5",
+  "email": "bob@example.com",
+  "role": "admin"
+}
+```
+
+## Roles
+
+| Role | Capabilities |
+|------|-------------|
+| `read` | View apps, sync status, health, history |
+| `sync` | All `read` + trigger syncs, rollbacks |
+| `admin` | All `sync` + manage members, delete apps, edit project settings |
+
+## Example: Full Project Workflow
+
+```sh
+# 1. Login
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -c cookies.txt \
+  -d '{"email":"admin@example.com","password":"..."}'
+
+# 2. Create a project
+curl -X POST http://localhost:8080/api/v1/projects \
+  -b cookies.txt \
+  -d '{"name":"team-alpha","description":"Team Alpha apps"}'
+
+# 3. Add a member with sync role
+curl -X POST http://localhost:8080/api/v1/projects/prj_01H8.../members \
+  -b cookies.txt \
+  -d '{"email":"dev@example.com","role":"sync"}'
+
+# 4. List projects
+curl http://localhost:8080/api/v1/projects -b cookies.txt
+```
+
+## Related
+
+- [RBAC](/operator/rbac) — How roles are enforced
+- [Applications API](/api/applications) — Apps belong to projects
+- [Server Overview](/server) — Database schema

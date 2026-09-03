@@ -1,0 +1,165 @@
+---
+title: Webhook Triggers
+description: Configure GitHub and GitLab webhooks for instant syncs
+---
+
+import { Steps, Step } from "fumadocs-ui/components/steps";
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Webhook Triggers
+
+By default, the operator polls Git every 60 seconds. Webhooks eliminate this delay — pushes to Git trigger an immediate reconciliation.
+
+## How It Works
+
+```
+┌──────────┐   push    ┌─────────────┐  annotate  ┌──────────┐
+│  GitHub  │──────────▶│   Webhook   │───────────▶│ Operator │
+│          │           │  Receiver   │            │ (sync)   │
+└──────────┘           │   :8082     │            └──────────┘
+                       └─────────────┘
+```
+
+1. You push to Git
+2. The Git provider sends a webhook to the operator's receiver
+3. The receiver validates the payload and finds matching `GitApplication`s
+4. Matching applications are annotated to trigger immediate reconciliation
+
+## Configuring the GitApplication
+
+Enable webhooks in the application spec:
+
+```yaml
+spec:
+  webhook:
+    enabled: true
+    secretRef: webhook-secret
+```
+
+Create the secret with your webhook validation secret:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: webhook-secret
+stringData:
+  secret: "my-webhook-secret-token"
+```
+
+## Configuring GitHub
+
+<Steps>
+
+### Step 1: Expose the Webhook Receiver
+
+The receiver listens on port `8082`. Expose it via:
+
+**Ingress**
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wardn-webhook
+spec:
+  rules:
+    - host: webhook.wardn.example.com
+      http:
+        paths:
+          - path: /webhook/github
+            pathType: Prefix
+            backend:
+              service:
+                name: wardn-operator
+                port:
+                  number: 8082
+```
+
+**Or port-forward (development)**
+
+```sh
+kubectl port-forward -n wardn-system svc/wardn-operator 8082:8082
+```
+
+### Step 2: Add the Webhook in GitHub
+
+1. Go to your repository → **Settings** → **Webhooks**
+2. Click **Add webhook**
+3. Configure:
+   - **Payload URL**: `https://webhook.wardn.example.com/webhook/github`
+   - **Content type**: `application/json`
+   - **Secret**: the same value as your `webhook-secret`
+   - **Events**: Just the **push** event
+4. Click **Add webhook**
+
+### Step 3: Test
+
+Push a commit and watch the sync trigger immediately:
+
+```sh
+kubectl get gitapplication my-app -w
+```
+
+</Steps>
+
+## Configuring GitLab
+
+<Callout type="info">
+  GitLab webhook support is currently a stub in the operator. Full support is coming.
+</Callout>
+
+1. Go to your project → **Settings** → **Webhooks**
+2. Configure:
+   - **URL**: `https://webhook.wardn.example.com/webhook/gitlab`
+   - **Secret token**: the same value as your `webhook-secret`
+   - **Trigger**: Push events
+
+## Payload Validation
+
+The webhook receiver validates:
+
+1. **Repository match** — the payload's repo URL must match a `GitApplication`'s `repoURL`
+2. **Branch match** — the pushed branch must match the application's `branch`
+3. **Signature** — the `X-Hub-Signature-256` header is validated against the secret (GitHub)
+4. **Rate limiting** — webhook floods are rate-limited per source
+
+## Supported Events
+
+| Provider | Event | Status |
+|----------|-------|--------|
+| GitHub | `push` | ✅ Supported |
+| GitHub | `ping` | ✅ Acknowledged |
+| GitLab | `push` | 🚧 Stub |
+| Bitbucket | `push` | 📋 Planned |
+
+## Troubleshooting
+
+### Webhook Not Triggering Sync
+
+1. **Check receiver logs**:
+
+```sh
+kubectl logs -n wardn-system deployment/wardn-operator | grep webhook
+```
+
+2. **Verify GitHub delivery**: Repository → Settings → Webhooks → click the webhook → **Recent Deliveries**. Check the response code.
+
+3. **Common issues**:
+   - `404` — path mismatch, check the URL
+   - `401` — signature validation failed, check the secret
+   - No matching app — verify `repoURL` matches exactly (including `.git` suffix or not)
+
+### Signature Validation Failures
+
+Ensure the secret in the Kubernetes Secret matches the GitHub webhook secret exactly:
+
+```sh
+kubectl get secret webhook-secret -o jsonpath='{.data.secret}' | base64 -d
+```
+
+## Related
+
+- [Configuration](/configuration) — Webhook spec fields
+- [Operator Webhooks](/operator/webhooks) — Operator-side webhook implementation
+- [Sync Policies](/concepts/sync-policies) — Sync trigger types

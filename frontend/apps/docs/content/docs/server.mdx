@@ -1,18 +1,17 @@
 ---
 title: Server
-description: Wardn API server — architecture, configuration, and API reference
+description: Wardn API server — architecture, configuration, RBAC, and complete API reference
 ---
 
 import { Callout } from "fumadocs-ui/components/callout";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+import { Cards, Card } from "fumadocs-ui/components/card";
 
 # Server
 
-The Wardn server is the central API layer. It handles authentication, RBAC, cluster management, sync orchestration, and real-time updates to the frontend.
+The Wardn server is the central API layer. It handles authentication, RBAC, cluster management, sync orchestration, real-time updates, and audit logging. Equivalent to ArgoCD's `argocd-server` but with built-in auth (no separate Dex).
 
-## Overview
-
-The server is a Go binary built with the `chi` router. It connects to Postgres for persistent state and Redis for caching, sessions, and pub/sub.
+## Architecture
 
 | Component | Technology |
 |-----------|-----------|
@@ -21,6 +20,18 @@ The server is a Go binary built with the `chi` router. It connects to Postgres f
 | Cache | Redis 8 (`redis/go-redis/v9`) |
 | Auth | Local users (bcrypt) + OIDC (`coreos/go-oidc/v3`) |
 | Sessions | Redis-backed with 24h TTL |
+| Real-time | SSE via Redis pub/sub |
+
+```
+┌──────────┐     ┌──────────┐     ┌──────────┐
+│ Frontend │────▶│  Server  │────▶│ Postgres │
+│ (Next.js)│     │ (Go API) │     │ (state)  │
+└──────────┘     └────┬─────┘     └──────────┘
+                      │
+                      ├──▶ Redis (cache + pubsub + sessions)
+                      ├──▶ Operator (k8s controller)
+                      └──▶ Webhook receiver
+```
 
 ## Configuration
 
@@ -38,55 +49,59 @@ All configuration is via environment variables.
 | `OPERATOR_ADDR` | `localhost:8081` | Operator gRPC address |
 
 <Callout type="warn">
-  `JWT_SECRET` must be set to a strong random value in production.
+  `JWT_SECRET` must be set to a strong random value in production. Never use the default or leave it empty.
 </Callout>
 
 ## API Endpoints
 
 ### Health
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/v1/health` | Health check |
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/api/v1/health` | None | Health check |
 
 ### Authentication
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/v1/auth/register` | Register a new user |
-| `POST` | `/api/v1/auth/login` | Login and create session |
-| `POST` | `/api/v1/auth/logout` | Destroy session |
-| `GET` | `/api/v1/auth/me` | Get current user (requires auth) |
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/api/v1/auth/register` | None | Register a new user |
+| `POST` | `/api/v1/auth/login` | None | Login and create session |
+| `POST` | `/api/v1/auth/logout` | Session | Destroy session |
+| `GET` | `/api/v1/auth/me` | Session | Get current user |
+
+<Callout type="info">
+  For detailed auth API examples (request/response bodies), see the [Authentication API](/api/authentication) page.
+</Callout>
 
 ### Applications
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/v1/apps` | List all GitApplications |
-| `GET` | `/api/v1/apps/{namespace}/{name}` | Get a specific application |
-| `POST` | `/api/v1/apps/{namespace}/{name}/sync` | Trigger manual sync |
-| `GET` | `/api/v1/apps/{namespace}/{name}/history` | Get sync history |
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/api/v1/apps` | Session | List all GitApplications |
+| `GET` | `/api/v1/apps/{namespace}/{name}` | Session | Get a specific application |
+| `POST` | `/api/v1/apps/{namespace}/{name}/sync` | Session+Sync | Trigger manual sync |
+| `GET` | `/api/v1/apps/{namespace}/{name}/history` | Session | Get sync history |
 
 ### Projects
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/v1/projects` | List projects |
-| `POST` | `/api/v1/projects` | Create a project |
-| `GET` | `/api/v1/projects/{id}` | Get a project |
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/api/v1/projects` | Session | List projects |
+| `POST` | `/api/v1/projects` | Session+Admin | Create a project |
+| `GET` | `/api/v1/projects/{id}` | Session | Get a project |
 
 ### Clusters
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/v1/clusters` | List registered clusters |
-| `POST` | `/api/v1/clusters` | Register a new cluster |
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/api/v1/clusters` | Session | List registered clusters |
+| `POST` | `/api/v1/clusters` | Session+Admin | Register a new cluster |
 
 ### Audit
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/v1/audit` | List audit log entries |
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/api/v1/audit` | Session | List audit log entries |
 
 ## RBAC
 
@@ -100,12 +115,43 @@ Wardn uses project-scoped RBAC with three roles:
 
 Roles are stored in the `project_users` table and enforced via middleware on every API request.
 
+<Callout type="info">
+  For more details on RBAC configuration and management, see the [RBAC](/operator/rbac) page.
+</Callout>
+
+## Database Schema
+
+The server auto-migrates on startup. Core tables:
+
+| Table | Purpose |
+|-------|---------|
+| `users` | Local user accounts with bcrypt-hashed passwords |
+| `projects` | Logical grouping with RBAC boundary |
+| `project_users` | Maps users to projects with roles |
+| `clusters` | Registered Kubernetes clusters |
+| `repo_creds` | Git repository credentials (SSH, HTTPS, GitHub App) |
+| `secret_stores` | SOPS, ESO, and Vault integration configs |
+| `sync_history` | Revision tracking for rollback |
+| `audit_log` | Who did what, when |
+
+### Redis Keys
+
+```
+cache:repo:{repo_url}:manifests     — parsed manifests cache
+cache:repo:{repo_url}:revision      — last known revision
+cache:health:{app_name}:{namespace} — health check results
+cache:secrets:{store_id}            — secret store connectivity status
+session:{session_id}                — user session data
+pubsub:app:{namespace}:{name}       — status change channel for SSE
+ratelimit:webhook:{source}          — webhook rate limiting
+```
+
 ## Running Locally
 
 <Tabs>
   <Tab value="docker-compose" label="Docker Compose">
 
-  ```bash
+  ```sh
   docker compose up -d
   ```
 
@@ -114,7 +160,7 @@ Roles are stored in the `project_users` table and enforced via middleware on eve
   </Tab>
   <Tab value="manual" label="Manual">
 
-  ```bash
+  ```sh
   # Start Postgres and Redis
   docker run -d --name wardn-pg -p 5432:5432 \
     -e POSTGRES_USER=wardn -e POSTGRES_PASSWORD=wardn -e POSTGRES_DB=wardn \
@@ -133,15 +179,13 @@ Roles are stored in the `project_users` table and enforced via middleware on eve
   </Tab>
 </Tabs>
 
-## Database Schema
+## Related
 
-The server auto-migrates on startup. Core tables:
-
-- **`users`** — local user accounts with bcrypt-hashed passwords
-- **`projects`** — logical grouping with RBAC boundary
-- **`project_users`** — maps users to projects with roles
-- **`clusters`** — registered Kubernetes clusters
-- **`repo_creds`** — git repository credentials
-- **`secret_stores`** — SOPS, ESO, and Vault integration configs
-- **`sync_history`** — revision tracking for rollback
-- **`audit_log`** — who did what, when
+<Cards>
+  <Card title="Authentication API" href="/api/authentication" description="Register, login, logout, and session management" />
+  <Card title="Applications API" href="/api/applications" description="CRUD operations for GitApplications" />
+  <Card title="Projects API" href="/api/projects" description="Project management and RBAC" />
+  <Card title="Clusters API" href="/api/clusters" description="Cluster registration and management" />
+  <Card title="Audit API" href="/api/audit" description="Audit log querying" />
+  <Card title="Secret Stores API" href="/api/secret-stores" description="Secret store configuration management" />
+</Cards>

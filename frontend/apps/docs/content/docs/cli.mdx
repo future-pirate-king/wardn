@@ -1,70 +1,47 @@
 ---
 title: CLI Reference
-description: Wardn CLI commands and usage
+description: Wardn CLI — installation, commands, flags, and usage examples
 ---
 
+import { Callout } from "fumadocs-ui/components/callout";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 
 # CLI Reference
 
+The `wardn` CLI is a command-line tool for managing Wardn applications, clusters, projects, and sync operations. It's ideal for CI/CD pipelines, automation scripts, and terminal-first workflows.
+
 ## Installation
 
-```bash
-curl -sL https://github.com/wardn/wardn/releases/latest/download/wardn-linux-amd64 -o /usr/local/bin/wardn
-chmod +x /usr/local/bin/wardn
-```
+<Tabs>
+  <Tab value="linux" label="Linux">
 
-## Commands
+  ```sh
+  curl -sL https://github.com/wardn/wardn/releases/latest/download/wardn-linux-amd64 -o /usr/local/bin/wardn
+  chmod +x /usr/local/bin/wardn
+  ```
 
-### `wardn app list`
+  </Tab>
+  <Tab value="macos" label="macOS">
 
-List all GitApplications across namespaces.
+  ```sh
+  curl -sL https://github.com/wardn/wardn/releases/latest/download/wardn-darwin-arm64 -o /usr/local/bin/wardn
+  chmod +x /usr/local/bin/wardn
+  ```
 
-```bash
-wardn app list
-wardn app list -n production
-```
+  </Tab>
+  <Tab value="windows" label="Windows">
 
-### `wardn app sync`
+  ```powershell
+  curl -sL https://github.com/wardn/wardn/releases/latest/download/wardn-windows-amd64 -o wardn.exe
+  ```
 
-Trigger a manual sync for a GitApplication.
+  </Tab>
+</Tabs>
 
-```bash
-wardn app sync my-app
-wardn app sync my-app --dry-run
-```
+Verify installation:
 
-### `wardn app diff`
-
-Show the diff between Git and cluster state.
-
-```bash
-wardn app diff my-app
-```
-
-### `wardn app history`
-
-View sync history for an application.
-
-```bash
-wardn app history my-app
-wardn app history my-app --revision 5
-```
-
-### `wardn app rollback`
-
-Rollback to a previous sync revision.
-
-```bash
-wardn app rollback my-app --revision 3
-```
-
-### `wardn cluster add`
-
-Register a remote cluster for multi-cluster management.
-
-```bash
-wardn cluster add --name staging --kubeconfig ~/.kube/staging
+```sh
+wardn version
 ```
 
 ## Global Flags
@@ -74,4 +51,189 @@ wardn cluster add --name staging --kubeconfig ~/.kube/staging
 | `--kubeconfig` | Path to kubeconfig file |
 | `-n, --namespace` | Namespace scope |
 | `--context` | Kubernetes context to use |
-| `-o, --output` | Output format (table, json, yaml) |
+| `-o, --output` | Output format (`table`, `json`, `yaml`) |
+| `--server` | Wardn API server URL (default: `http://localhost:8080`) |
+| `--token` | API token for authentication |
+
+## Commands
+
+### `wardn app list`
+
+List all GitApplications across namespaces.
+
+```sh
+wardn app list
+wardn app list -n production
+wardn app list -o json
+```
+
+Output:
+
+```
+NAME           NAMESPACE    SYNC STATUS   HEALTH    REVISION
+my-app         default      Synced        Healthy   abc1234
+api-server     production   Synced        Healthy   def5678
+worker         staging      OutOfSync     Degraded  ghi9012
+```
+
+### `wardn app get`
+
+Get details of a specific GitApplication.
+
+```sh
+wardn app get my-app
+wardn app get my-app -o yaml
+```
+
+### `wardn app sync`
+
+Trigger a manual sync for a GitApplication.
+
+```sh
+wardn app sync my-app
+wardn app sync my-app --dry-run
+wardn app sync my-app --force
+```
+
+| Flag | Description |
+|------|-------------|
+| `--dry-run` | Show what would be applied without making changes |
+| `--force` | Force sync even if already synced |
+
+### `wardn app diff`
+
+Show the diff between Git state and live cluster state.
+
+```sh
+wardn app diff my-app
+```
+
+Output:
+
+```diff
+--- Deployment/default/my-app (live)
++++ Deployment/default/my-app (git)
+@@ -1,7 +1,7 @@
+ spec:
+   replicas: 3
+   template:
+     spec:
+       containers:
+         - name: app
+-          image: myapp:v1.2.3
++          image: myapp:v1.2.4
+```
+
+### `wardn app history`
+
+View sync history for an application.
+
+```sh
+wardn app history my-app
+wardn app history my-app --revision 5
+```
+
+### `wardn app rollback`
+
+Rollback to a previous sync revision.
+
+```sh
+wardn app rollback my-app --revision 3
+```
+
+<Callout type="warn">
+  Rollback re-applies the manifests from the specified revision. If the Git repo has been updated since, the next automated sync will override the rollback.
+</Callout>
+
+### `wardn app create`
+
+Create a new GitApplication from CLI.
+
+```sh
+wardn app create \
+  --name my-app \
+  --repo https://github.com/myorg/my-app \
+  --branch main \
+  --path manifests \
+  --sync-policy automated \
+  --prune \
+  --self-heal
+```
+
+### `wardn app delete`
+
+Delete a GitApplication.
+
+```sh
+wardn app delete my-app
+wardn app delete my-app --cascade
+```
+
+### `wardn cluster add`
+
+Register a remote cluster for multi-cluster management.
+
+```sh
+wardn cluster add --name staging --kubeconfig ~/.kube/staging
+wardn cluster add --name production --server https://prod-cluster:6443
+```
+
+### `wardn cluster list`
+
+List registered clusters.
+
+```sh
+wardn cluster list
+```
+
+### `wardn cluster remove`
+
+Remove a registered cluster.
+
+```sh
+wardn cluster remove staging
+```
+
+### `wardn project create`
+
+Create a new project.
+
+```sh
+wardn project create --name production \
+  --description "Production applications" \
+  --allowed-clusters prod-cluster
+```
+
+### `wardn project list`
+
+List projects.
+
+```sh
+wardn project list
+```
+
+### `wardn login`
+
+Authenticate with a Wardn server.
+
+```sh
+wardn login --server http://localhost:8080
+wardn login --server http://localhost:8080 --token my-api-token
+```
+
+## Using the CLI in CI/CD
+
+```sh
+# Example: GitHub Actions
+- name: Deploy via Wardn
+  run: |
+    wardn login --server $WARDN_SERVER --token $WARDN_TOKEN
+    wardn app sync my-app --force
+    wardn app get my-app -o json | jq '.status.syncStatus'
+```
+
+## Related
+
+- [Getting Started](/getting-started) — Install Wardn and deploy your first app
+- [Configuration](/configuration) — GitApplication CRD spec
+- [API Reference](/api/authentication) — REST API for programmatic access

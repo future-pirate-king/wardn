@@ -1,0 +1,111 @@
+---
+title: Comparison
+description: Wardn vs ArgoCD vs Flux — honest comparison
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Comparison
+
+How Wardn compares to the established GitOps tools. We built Wardn because we believe you shouldn't need a dedicated platform team to run ArgoCD.
+
+## Feature Matrix
+
+| Feature | Wardn | ArgoCD | Flux |
+|---------|-------|--------|------|
+| **Git sync** | ✅ | ✅ | ✅ |
+| **Raw YAML** | ✅ | ✅ | ✅ |
+| **Helm** | 🚧 | ✅ | ✅ |
+| **Kustomize** | 📋 | ✅ | ✅ |
+| **Server-side apply** | ✅ | ✅ | ✅ |
+| **Pruning** | ✅ | ✅ | ✅ |
+| **Self-heal** | ✅ | ✅ | ✅ |
+| **Health checks** | ✅ | ✅ | ✅ (limited) |
+| **Multi-cluster** | ✅ | ✅ | ✅ |
+| **Sync waves** | 📋 | ✅ | ✅ (dependsOn) |
+| **Hooks** | 📋 | ✅ | 🚧 |
+| **Rollback** | ✅ | ✅ | ❌ |
+| **Diff view** | ✅ | ✅ | ❌ |
+| **Web UI** | ✅ | ✅ | ❌ (3rd party) |
+| **Built-in auth** | ✅ | ❌ (needs Dex) | ❌ |
+| **RBAC** | ✅ | ✅ (complex) | ❌ |
+| **Audit log** | ✅ | ✅ | ❌ |
+| **SOPS** | ✅ | ✅ | ✅ |
+| **ESO integration** | ✅ | 🚧 | ✅ |
+| **Vault direct** | 📋 | ❌ | ❌ |
+| **Notifications** | ✅ | ✅ | ✅ |
+| **Webhooks** | ✅ | ✅ | ✅ |
+| **CLI** | ✅ | ✅ | ✅ |
+| **API** | ✅ | ✅ (gRPC/REST) | ❌ |
+
+✅ Available · 🚧 In progress · 📋 Planned · ❌ Not available
+
+## Component Count
+
+| Tool | Components |
+|------|-----------|
+| **Wardn** | 3 — server, operator, frontend (+ Postgres, Redis) |
+| **ArgoCD** | 5+ — server, repo-server, application-controller, dex, redis, notifications-controller |
+| **Flux** | 1 — source-controller + kustomize-controller + helm-controller (3 operators) |
+
+Fewer components means:
+- Simpler installation
+- Less to monitor and upgrade
+- Smaller attack surface
+- Easier troubleshooting
+
+## Philosophy Differences
+
+### vs ArgoCD
+
+ArgoCD is mature and feature-rich — but that comes with complexity:
+
+- **Auth** — ArgoCD requires Dex (or another OIDC proxy) for SSO. Wardn has local auth + OIDC built in.
+- **RBAC** — ArgoCD's RBAC uses Casbin policies in a ConfigMap. Wardn's is UI-managed and project-scoped.
+- **UI** — ArgoCD's UI is powerful but dense. Wardn's is a focused dashboard with an app creation wizard.
+- **Secrets** — ArgoCD has no native secret management UI. Wardn unifies SOPS, ESO, and Vault.
+
+Choose **ArgoCD** if you need its mature ecosystem, application sets, or multi-tenancy at scale today.
+
+### vs Flux
+
+Flux is minimal and composable — but that means assembling your own platform:
+
+- **UI** — Flux has none. You bring Weave GitOps or Capabilities.
+- **Auth** — None. You bring your own (OAuth proxy, etc.).
+- **Rollback** — Not built in; you revert in Git.
+- **Secrets** — SOPS support only, no UI.
+
+Choose **Flux** if you want a minimal operator and are comfortable building the platform layer yourself.
+
+### Choose Wardn if...
+
+- You want GitOps **without the platform team overhead**
+- You need a **UI with built-in auth and RBAC** out of the box
+- You want **secret management with a unified interface**
+- You're starting fresh and don't have ArgoCD/Flux legacy
+- You value **operational simplicity** over feature maximalism
+
+## Migration
+
+<Callout type="info">
+  Migration tooling from ArgoCD (import Applications as GitApplications) is on the roadmap.
+</Callout>
+
+The `GitApplication` spec is intentionally close to ArgoCD's `Application` spec, making migration mostly mechanical:
+
+| ArgoCD | Wardn |
+|--------|-------|
+| `spec.source.repoURL` | `spec.repoURL` |
+| `spec.source.targetRevision` | `spec.branch` |
+| `spec.source.path` | `spec.path` |
+| `spec.syncPolicy.automated` | `spec.syncPolicy.automated` |
+| `spec.syncPolicy.automated.prune` | `spec.syncPolicy.prune` |
+| `spec.syncPolicy.automated.selfHeal` | `spec.syncPolicy.selfHeal` |
+| `spec.destination.server` | `spec.targetCluster` |
+| `spec.sources[].helm.valueFiles` | `spec.helm.valuesFile` |
+
+## Related
+
+- [Roadmap](/reference/roadmap) — What's coming next
+- [Architecture](/operator/architecture) — How Wardn is built

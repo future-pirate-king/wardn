@@ -1,0 +1,153 @@
+---
+title: Manifest Management
+description: Raw YAML, Helm, and Kustomize manifest parsing in Wardn
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+
+# Manifest Management
+
+Wardn supports multiple manifest formats. The `manifestType` field in the `GitApplication` spec determines how manifests are parsed and rendered before being applied to the cluster.
+
+## Supported Types
+
+| Type | Status | Description |
+|------|--------|-------------|
+| `Raw` | ✅ Available | Plain YAML/JSON manifests |
+| `Helm` | 🚧 In Progress | Helm charts rendered with Helm Go SDK |
+| `Kustomize` | 📋 Planned | Kustomize overlays via `sigs.k8s.io/kustomize` |
+
+## Raw YAML/JSON
+
+The simplest manifest type — Wardn reads `.yaml`, `.yml`, and `.json` files from the specified path and parses them into Kubernetes resources.
+
+```yaml
+spec:
+  manifestType: Raw
+  path: manifests/
+```
+
+### Multi-Document Files
+
+Wardn supports multi-document YAML files (separated by `---`):
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  key: value
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+spec:
+  replicas: 3
+```
+
+### Directory Structure
+
+```
+my-repo/
+└── manifests/
+    ├── deployment.yaml
+    ├── service.yaml
+    ├── configmap.yaml
+    └── ingress.yaml
+```
+
+All `.yaml`, `.yml`, and `.json` files in the path are parsed and applied.
+
+## Helm
+
+<Callout type="info">
+  Helm support is currently in development. The Helm Go SDK will be used for rendering charts.
+</Callout>
+
+When `manifestType` is `Helm`, Wardn renders the chart using the Helm Go SDK:
+
+```yaml
+spec:
+  manifestType: Helm
+  path: charts/my-app/
+  helm:
+    valuesFile: values/production.yaml
+    releaseName: my-app
+    namespace: production
+    inlineValues: |
+      replicas: 3
+      image:
+        tag: v1.2.3
+```
+
+### Values Precedence
+
+Values are merged in order of precedence (highest to lowest):
+
+1. `inlineValues` — applied last, highest precedence
+2. `valuesFile` — applied first
+3. Chart defaults (`values.yaml` in the chart)
+
+### Example Repo Structure
+
+```
+my-repo/
+└── charts/
+    └── my-app/
+        ├── Chart.yaml
+        ├── values.yaml
+        ├── templates/
+        │   ├── deployment.yaml
+        │   ├── service.yaml
+        │   └── _helpers.tpl
+        └── values/
+            ├── production.yaml
+            └── staging.yaml
+```
+
+## Kustomize
+
+<Callout type="info">
+  Kustomize support is planned for Phase 2. It will use `sigs.k8s.io/kustomize` for rendering.
+</Callout>
+
+Planned configuration:
+
+```yaml
+spec:
+  manifestType: Kustomize
+  path: overlays/production/
+  kustomizeConfig:
+    images:
+      - myapp:v1.2.3
+```
+
+## SOPS Encrypted Manifests
+
+Regardless of manifest type, Wardn can decrypt SOPS-encrypted files at apply time. See [Secret Management](/secrets/overview) for details.
+
+## Server-Side Apply
+
+All manifests are applied using Kubernetes **server-side apply** with the `wardn` field manager. This provides:
+
+- **3-way merge** — Wardn manages only the fields it owns
+- **Conflict detection** — if another controller owns a field, Wardn won't overwrite it
+- **Pruning** — fields removed from Git are removed from the cluster
+
+## Manifest Validation
+
+Before applying, Wardn validates manifests:
+
+1. **Schema validation** — Kubernetes API server validates against the OpenAPI schema
+2. **Dry-run** — manifests are sent to the API server in dry-run mode first
+3. **Resource tracking** — all applied resources are labeled for pruning
+
+## Related
+
+- [Configuration](/configuration) — Full GitApplication CRD spec
+- [Helm Charts Guide](/guides/helm-charts) — Tutorial for deploying Helm charts
+- [Kustomize Guide](/guides/kustomize) — Tutorial for Kustomize overlays
+- [Secret Management](/secrets/overview) — SOPS, ESO, and Vault integration
