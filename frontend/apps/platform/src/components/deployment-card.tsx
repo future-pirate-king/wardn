@@ -1,16 +1,17 @@
 "use client"
 
+import Link from "next/link"
 import { Card, CardContent, CardHeader } from "@repo/ui/card"
 import { Badge } from "@repo/ui/badge"
 import { SyncStatusBadge, HealthStatusBadge } from "@/components/status-badge"
 import type { Deployment } from "@/lib/deployments"
+import { getDeploymentResourceCount } from "@/lib/deployments"
 import {
-  GitBranchIcon,
   ServerIcon,
-  BoxesIcon,
-  RefreshCwIcon,
+  LayersIcon,
   ClockIcon,
   MoreVerticalIcon,
+  BoxesIcon,
 } from "lucide-react"
 
 function formatRelativeTime(dateStr: string | null): string {
@@ -28,67 +29,68 @@ function formatRelativeTime(dateStr: string | null): string {
 }
 
 export function DeploymentCard({ deployment }: { deployment: Deployment }) {
+  const resourceCount = getDeploymentResourceCount(deployment)
+  const componentNames = deployment.components.map((c) => c.name)
+
   return (
-    <Card className="group h-full min-w-[280px] overflow-hidden hover:ring-1 hover:ring-foreground/10 transition-all cursor-pointer">
-      <CardHeader>
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex flex-col gap-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <BoxesIcon className="size-4 shrink-0 text-muted-foreground" />
-              <span className="font-medium truncate">{deployment.name}</span>
+    <Link href={`/deployments/${deployment.id}`} className="block">
+      <Card className="group h-full min-w-[280px] overflow-hidden hover:ring-1 hover:ring-foreground/10 transition-all cursor-pointer">
+        <CardHeader>
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex flex-col gap-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <LayersIcon className="size-4 shrink-0 text-muted-foreground" />
+                <span className="font-medium truncate">{deployment.name}</span>
+              </div>
+              <span className="text-xs text-muted-foreground">{deployment.namespace}</span>
             </div>
-            <span className="text-xs text-muted-foreground">{deployment.namespace}</span>
+            <button className="text-muted-foreground hover:text-foreground shrink-0 rounded-lg p-1 hover:bg-muted" onClick={(e) => e.preventDefault()}>
+              <MoreVerticalIcon className="size-4" />
+            </button>
           </div>
-          <button className="text-muted-foreground hover:text-foreground shrink-0 rounded-lg p-1 hover:bg-muted">
-            <MoreVerticalIcon className="size-4" />
-          </button>
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-2 min-h-[24px]">
-          <SyncStatusBadge status={deployment.syncStatus} />
-          <HealthStatusBadge status={deployment.healthStatus} />
-          <Badge variant="outline" className="text-xs">
-            {deployment.manifestType}
-          </Badge>
-        </div>
+        </CardHeader>
+        <CardContent className="flex flex-1 flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-2 min-h-[24px]">
+            <SyncStatusBadge status={deployment.syncStatus} />
+            <HealthStatusBadge status={deployment.healthStatus} />
+            <Badge variant="outline" className="text-xs">
+              {deployment.project}
+            </Badge>
+          </div>
 
-        <div className="flex flex-col gap-1.5 text-xs text-muted-foreground min-h-[60px]">
-          <div className="flex items-center gap-2">
-            <GitBranchIcon className="size-3.5 shrink-0" />
-            <span className="truncate">{deployment.branch}</span>
-            <span className="text-foreground/30">·</span>
-            <span className="font-mono text-[10px]">{deployment.revision}</span>
+          <div className="flex flex-col gap-1.5 text-xs text-muted-foreground min-h-[60px]">
+            <div className="flex items-center gap-2">
+              <BoxesIcon className="size-3.5 shrink-0" />
+              <span>{deployment.components.length} components</span>
+              <span className="text-foreground/30">·</span>
+              <span>{resourceCount} resources</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <ServerIcon className="size-3.5 shrink-0" />
+              <span className="truncate">{deployment.targetCluster}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <ClockIcon className="size-3.5 shrink-0" />
+              <span>{formatRelativeTime(deployment.lastSyncAt)}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <ServerIcon className="size-3.5 shrink-0" />
-            <span className="truncate">{deployment.targetCluster}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <ClockIcon className="size-3.5 shrink-0" />
-            <span>{formatRelativeTime(deployment.lastSyncAt)}</span>
-            <span className="text-foreground/30">·</span>
-            <span>{deployment.resourceCount} resources</span>
-          </div>
-        </div>
 
-        <div className="mt-auto flex items-center justify-between border-t border-border pt-3 min-h-[32px]">
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            {deployment.autoSync && (
-              <span className="flex items-center gap-1">
-                <RefreshCwIcon className="size-3" />
-                Auto
-              </span>
-            )}
-            {deployment.prune && <span>Prune</span>}
-            {deployment.selfHeal && <span>Self-heal</span>}
+          <div className="mt-auto border-t border-border pt-3 min-h-[32px]">
+            <div className="flex flex-wrap gap-1">
+              {componentNames.slice(0, 3).map((name) => (
+                <Badge key={name} variant="secondary" className="text-[10px] gap-1">
+                  {name}
+                </Badge>
+              ))}
+              {componentNames.length > 3 && (
+                <Badge variant="secondary" className="text-[10px]">
+                  +{componentNames.length - 3}
+                </Badge>
+              )}
+            </div>
           </div>
-          <button className="flex items-center gap-1 text-xs font-medium text-foreground hover:text-primary">
-            <RefreshCwIcon className="size-3" />
-            Sync
-          </button>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </Link>
   )
 }

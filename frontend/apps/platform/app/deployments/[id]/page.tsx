@@ -8,12 +8,29 @@ import {
 import {
   Breadcrumb,
   BreadcrumbItem,
+  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
+  BreadcrumbSeparator,
 } from "@repo/ui/breadcrumb"
-import { DeploymentView } from "@/components/deployment-view"
+import { DeploymentDetail } from "@/components/deployment-detail"
+import { getDeployment, mockDeployments } from "@/lib/deployments"
+import { notFound } from "next/navigation"
+import Link from "next/link"
 
-export default function DeploymentsPage() {
+export function generateStaticParams() {
+  return mockDeployments.map((d) => ({ id: d.id }))
+}
+
+export default async function DeploymentPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
+  const deployment = getDeployment(id)
+  if (!deployment) notFound()
+
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -28,14 +45,20 @@ export default function DeploymentsPage() {
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <BreadcrumbPage>Deployments</BreadcrumbPage>
+                  <BreadcrumbLink render={<Link href="/deployments" />}>
+                    Deployments
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>{deployment.name}</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-6 p-6 rounded-tl-2xl bg-background border-l border-t border-border">
-          <DeploymentView />
+          <DeploymentDetail deployment={deployment} />
         </div>
       </SidebarInset>
     </SidebarProvider>

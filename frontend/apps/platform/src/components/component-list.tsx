@@ -10,17 +10,15 @@ import {
 } from "@repo/ui/table"
 import { Badge } from "@repo/ui/badge"
 import { SyncStatusBadge, HealthStatusBadge } from "@/components/status-badge"
-import type { Deployment } from "@/lib/deployments"
-import type { SortField, SortDirection } from "@/components/deployment-view"
+import type { Component } from "@/lib/deployments"
 import {
+  RefreshCwIcon,
+  MoreVerticalIcon,
   ArrowUpIcon,
   ArrowDownIcon,
   ChevronsUpDownIcon,
-  RefreshCwIcon,
-  MoreVerticalIcon,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { getDeploymentResourceCount } from "@/lib/deployments"
 
 function formatRelativeTime(dateStr: string | null): string {
   if (!dateStr) return "Never"
@@ -36,12 +34,15 @@ function formatRelativeTime(dateStr: string | null): string {
   return `${diffDay}d ago`
 }
 
+type ComponentSortField = "name" | "syncStatus" | "healthStatus" | "lastSyncAt"
+type SortDirection = "asc" | "desc"
+
 interface SortableHeaderProps {
-  field: SortField
+  field: ComponentSortField
   label: string
-  currentSort: SortField
+  currentSort: ComponentSortField
   sortDirection: SortDirection
-  onSort: (field: SortField) => void
+  onSort: (field: ComponentSortField) => void
 }
 
 function SortableHeader({ field, label, currentSort, sortDirection, onSort }: SortableHeaderProps) {
@@ -65,14 +66,15 @@ function SortableHeader({ field, label, currentSort, sortDirection, onSort }: So
   )
 }
 
-interface DeploymentListProps {
-  deployments: Deployment[]
-  sortField: SortField
+interface ComponentListProps {
+  components: Component[]
+  deploymentId: string
+  sortField: ComponentSortField
   sortDirection: SortDirection
-  onSort: (field: SortField) => void
+  onSort: (field: ComponentSortField) => void
 }
 
-export function DeploymentList({ deployments, sortField, sortDirection, onSort }: DeploymentListProps) {
+export function ComponentList({ components, deploymentId, sortField, sortDirection, onSort }: ComponentListProps) {
   const router = useRouter()
 
   return (
@@ -89,11 +91,8 @@ export function DeploymentList({ deployments, sortField, sortDirection, onSort }
             <TableHead>
               <SortableHeader field="healthStatus" label="Health" currentSort={sortField} sortDirection={sortDirection} onSort={onSort} />
             </TableHead>
-            <TableHead>
-              <SortableHeader field="targetCluster" label="Cluster" currentSort={sortField} sortDirection={sortDirection} onSort={onSort} />
-            </TableHead>
-            <TableHead>Project</TableHead>
-            <TableHead>Components</TableHead>
+            <TableHead>Manifest</TableHead>
+            <TableHead>Branch</TableHead>
             <TableHead>Resources</TableHead>
             <TableHead>
               <SortableHeader field="lastSyncAt" label="Last Sync" currentSort={sortField} sortDirection={sortDirection} onSort={onSort} />
@@ -102,39 +101,38 @@ export function DeploymentList({ deployments, sortField, sortDirection, onSort }
           </TableRow>
         </TableHeader>
         <TableBody>
-          {deployments.length === 0 ? (
+          {components.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
-                No deployments found
+              <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
+                No components found
               </TableCell>
             </TableRow>
           ) : (
-            deployments.map((dep) => (
+            components.map((comp) => (
               <TableRow
-                key={dep.id}
+                key={comp.id}
                 className="cursor-pointer"
-                onClick={() => router.push(`/deployments/${dep.id}`)}
+                onClick={() => router.push(`/deployments/${deploymentId}/${comp.id}`)}
               >
                 <TableCell>
                   <div className="flex flex-col">
-                    <span className="font-medium">{dep.name}</span>
-                    <span className="text-xs text-muted-foreground">{dep.namespace}</span>
+                    <span className="font-medium">{comp.name}</span>
+                    <span className="text-xs text-muted-foreground">{comp.namespace}</span>
                   </div>
                 </TableCell>
                 <TableCell>
-                  <SyncStatusBadge status={dep.syncStatus} />
+                  <SyncStatusBadge status={comp.syncStatus} />
                 </TableCell>
                 <TableCell>
-                  <HealthStatusBadge status={dep.healthStatus} />
+                  <HealthStatusBadge status={comp.healthStatus} />
                 </TableCell>
-                <TableCell className="text-muted-foreground text-xs">{dep.targetCluster}</TableCell>
                 <TableCell>
-                  <Badge variant="outline" className="text-xs">{dep.project}</Badge>
+                  <Badge variant="outline" className="text-xs">{comp.manifestType}</Badge>
                 </TableCell>
-                <TableCell className="text-muted-foreground">{dep.components.length}</TableCell>
-                <TableCell className="text-muted-foreground">{getDeploymentResourceCount(dep)}</TableCell>
+                <TableCell className="text-muted-foreground text-xs font-mono">{comp.branch}</TableCell>
+                <TableCell className="text-muted-foreground">{comp.resources.length}</TableCell>
                 <TableCell className="text-muted-foreground text-xs">
-                  {formatRelativeTime(dep.lastSyncAt)}
+                  {formatRelativeTime(comp.lastSyncAt)}
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center justify-end gap-1">

@@ -15,8 +15,6 @@ import {
   DrawerContent,
   DrawerHeader,
   DrawerTitle,
-  DrawerDescription,
-  DrawerFooter,
 } from "@repo/ui/drawer"
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/tabs"
 import { DeploymentCard } from "@/components/deployment-card"
@@ -28,12 +26,8 @@ import {
   projects,
   syncStatuses,
   healthStatuses,
-  manifestTypes,
-  syncPolicyTypes,
   type SyncStatus,
   type HealthStatus,
-  type ManifestType,
-  type SyncPolicyType,
 } from "@/lib/deployments"
 import {
   SearchIcon,
@@ -47,15 +41,15 @@ import {
   ArrowUpIcon,
   ArrowDownIcon,
   CheckIcon,
+  PlusIcon,
 } from "lucide-react"
 
-export type SortField = "name" | "namespace" | "syncStatus" | "healthStatus" | "targetCluster" | "lastSyncAt"
+export type SortField = "name" | "syncStatus" | "healthStatus" | "targetCluster" | "lastSyncAt"
 export type SortDirection = "asc" | "desc"
 export type ViewMode = "card" | "list"
 
 const sortFieldLabels: Record<SortField, string> = {
   name: "Name",
-  namespace: "Namespace",
   syncStatus: "Sync Status",
   healthStatus: "Health Status",
   targetCluster: "Cluster",
@@ -77,16 +71,11 @@ export function DeploymentView() {
   const [selectedHealthStatuses, setSelectedHealthStatuses] = React.useState<Set<HealthStatus>>(new Set())
   const [selectedClusters, setSelectedClusters] = React.useState<Set<string>>(new Set())
   const [selectedProjects, setSelectedProjects] = React.useState<Set<string>>(new Set())
-  const [selectedManifestTypes, setSelectedManifestTypes] = React.useState<Set<ManifestType>>(new Set())
-  const [selectedSyncPolicies, setSelectedSyncPolicies] = React.useState<Set<SyncPolicyType>>(new Set())
-
   const activeFilterCount =
     selectedSyncStatuses.size +
     selectedHealthStatuses.size +
     selectedClusters.size +
-    selectedProjects.size +
-    selectedManifestTypes.size +
-    selectedSyncPolicies.size
+    selectedProjects.size
 
   const toggleFilter = <T,>(set: Set<T>, value: T, setter: React.Dispatch<React.SetStateAction<Set<T>>>) => {
     setter((prev) => {
@@ -102,8 +91,6 @@ export function DeploymentView() {
     setSelectedHealthStatuses(new Set())
     setSelectedClusters(new Set())
     setSelectedProjects(new Set())
-    setSelectedManifestTypes(new Set())
-    setSelectedSyncPolicies(new Set())
   }
 
   const handleSort = (field: SortField) => {
@@ -122,16 +109,14 @@ export function DeploymentView() {
         const matches =
           dep.name.toLowerCase().includes(q) ||
           dep.namespace.toLowerCase().includes(q) ||
-          dep.repoURL.toLowerCase().includes(q) ||
-          dep.project.toLowerCase().includes(q)
+          dep.project.toLowerCase().includes(q) ||
+          dep.components.some((c) => c.name.toLowerCase().includes(q))
         if (!matches) return false
       }
       if (selectedSyncStatuses.size > 0 && !selectedSyncStatuses.has(dep.syncStatus)) return false
       if (selectedHealthStatuses.size > 0 && !selectedHealthStatuses.has(dep.healthStatus)) return false
       if (selectedClusters.size > 0 && !selectedClusters.has(dep.targetCluster)) return false
       if (selectedProjects.size > 0 && !selectedProjects.has(dep.project)) return false
-      if (selectedManifestTypes.size > 0 && !selectedManifestTypes.has(dep.manifestType)) return false
-      if (selectedSyncPolicies.size > 0 && !selectedSyncPolicies.has(dep.syncPolicy)) return false
       return true
     })
 
@@ -143,9 +128,6 @@ export function DeploymentView() {
       switch (sortField) {
         case "name":
           cmp = a.name.localeCompare(b.name)
-          break
-        case "namespace":
-          cmp = a.namespace.localeCompare(b.namespace)
           break
         case "syncStatus":
           cmp = (syncOrder[a.syncStatus] ?? 99) - (syncOrder[b.syncStatus] ?? 99)
@@ -164,19 +146,33 @@ export function DeploymentView() {
     })
 
     return result
-  }, [search, sortField, sortDirection, selectedSyncStatuses, selectedHealthStatuses, selectedClusters, selectedProjects, selectedManifestTypes, selectedSyncPolicies])
+  }, [search, sortField, sortDirection, selectedSyncStatuses, selectedHealthStatuses, selectedClusters, selectedProjects])
 
   React.useEffect(() => {
     setPage(0)
-  }, [search, selectedSyncStatuses, selectedHealthStatuses, selectedClusters, selectedProjects, selectedManifestTypes, selectedSyncPolicies, pageSize])
+  }, [search, selectedSyncStatuses, selectedHealthStatuses, selectedClusters, selectedProjects, pageSize])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const currentPage = Math.min(page, totalPages - 1)
   const paged = filtered.slice(currentPage * pageSize, currentPage * pageSize + pageSize)
 
+  const quickSyncFilters: SyncStatus[] = ["Synced", "Syncing", "OutOfSync"]
+  const quickHealthFilters: HealthStatus[] = ["Healthy", "Degraded"]
+
+  const syncCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const d of mockDeployments) counts[d.syncStatus] = (counts[d.syncStatus] ?? 0) + 1
+    return counts
+  }, [])
+  const healthCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const d of mockDeployments) counts[d.healthStatus] = (counts[d.healthStatus] ?? 0) + 1
+    return counts
+  }, [])
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 rounded-xl p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="relative flex-1 max-w-md">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
@@ -195,7 +191,35 @@ export function DeploymentView() {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <Button size="sm">
+          <PlusIcon className="size-4" />
+          New Deployment
+        </Button>
+      </div>
+
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          {quickSyncFilters.map((s) => (
+            <QuickFilterChip
+              key={s}
+              label={s}
+              count={syncCounts[s] ?? 0}
+              color={s === "Synced" ? "green" : s === "Syncing" ? "blue" : "yellow"}
+              active={selectedSyncStatuses.has(s)}
+              onClick={() => toggleFilter(selectedSyncStatuses, s, setSelectedSyncStatuses)}
+            />
+          ))}
+          {quickHealthFilters.map((h) => (
+            <QuickFilterChip
+              key={h}
+              label={h}
+              count={healthCounts[h] ?? 0}
+              color={h === "Healthy" ? "green" : "red"}
+              active={selectedHealthStatuses.has(h)}
+              onClick={() => toggleFilter(selectedHealthStatuses, h, setSelectedHealthStatuses)}
+            />
+          ))}
+
           <Button variant="outline" size="sm" onClick={() => setFilterOpen(true)}>
             <FilterIcon className="size-4" />
             Filters
@@ -211,29 +235,29 @@ export function DeploymentView() {
             Sort
           </Button>
 
-          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-            <TabsList>
-              <TabsTrigger value="card">
-                <LayoutGridIcon className="size-4" />
-                <span className="hidden sm:inline">Grid</span>
-              </TabsTrigger>
-              <TabsTrigger value="list">
-                <ListIcon className="size-4" />
-                <span className="hidden sm:inline">List</span>
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          {activeFilterCount > 0 && (
+            <button
+              onClick={clearAllFilters}
+              className="text-xs text-muted-foreground hover:text-foreground hover:underline transition-colors"
+            >
+              Clear all
+            </button>
+          )}
         </div>
-      </div>
 
-      {activeFilterCount > 0 && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active</span>
-          <button onClick={clearAllFilters} className="text-foreground hover:underline">
-            Clear all
-          </button>
-        </div>
-      )}
+        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
+          <TabsList>
+            <TabsTrigger value="card">
+              <LayoutGridIcon className="size-4" />
+              <span className="hidden sm:inline">Grid</span>
+            </TabsTrigger>
+            <TabsTrigger value="list">
+              <ListIcon className="size-4" />
+              <span className="hidden sm:inline">List</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
 
       {
         filtered.length === 0 ? (
@@ -281,14 +305,10 @@ export function DeploymentView() {
         selectedHealthStatuses={selectedHealthStatuses}
         selectedClusters={selectedClusters}
         selectedProjects={selectedProjects}
-        selectedManifestTypes={selectedManifestTypes}
-        selectedSyncPolicies={selectedSyncPolicies}
         onToggleSyncStatus={(s) => toggleFilter(selectedSyncStatuses, s, setSelectedSyncStatuses)}
         onToggleHealthStatus={(h) => toggleFilter(selectedHealthStatuses, h, setSelectedHealthStatuses)}
         onToggleCluster={(c) => toggleFilter(selectedClusters, c, setSelectedClusters)}
         onToggleProject={(p) => toggleFilter(selectedProjects, p, setSelectedProjects)}
-        onToggleManifestType={(m) => toggleFilter(selectedManifestTypes, m, setSelectedManifestTypes)}
-        onToggleSyncPolicy={(sp) => toggleFilter(selectedSyncPolicies, sp, setSelectedSyncPolicies)}
       />
 
       <SortDrawer
@@ -300,6 +320,49 @@ export function DeploymentView() {
         onSortDirectionChange={setSortDirection}
       />
     </div>
+  )
+}
+
+const quickFilterUnselected: Record<string, string> = {
+  green: "bg-green-500/10 text-green-700 dark:text-green-400 border-transparent hover:bg-green-500/20",
+  red: "bg-red-500/10 text-red-700 dark:text-red-400 border-transparent hover:bg-red-500/20",
+  yellow: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-transparent hover:bg-yellow-500/20",
+  blue: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-transparent hover:bg-blue-500/20",
+}
+
+const quickFilterSelected: Record<string, string> = {
+  green: "bg-green-500 text-white border-green-500",
+  red: "bg-red-500 text-white border-red-500",
+  yellow: "bg-yellow-500 text-white border-yellow-500",
+  blue: "bg-blue-500 text-white border-blue-500",
+}
+
+function QuickFilterChip({
+  label,
+  count,
+  color,
+  active,
+  onClick,
+}: {
+  label: string
+  count: number
+  color: string
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        "inline-flex h-8 items-center gap-1.5 rounded-4xl px-3 py-1 text-sm font-medium transition-colors border " +
+        (active
+          ? quickFilterSelected[color] ?? quickFilterSelected.green
+          : "font-light " + (quickFilterUnselected[color] ?? quickFilterUnselected.green))
+      }
+    >
+      <span>{count}</span>
+      <span>{label}</span>
+    </button>
   )
 }
 
@@ -346,14 +409,10 @@ function FilterDrawer({
   selectedHealthStatuses,
   selectedClusters,
   selectedProjects,
-  selectedManifestTypes,
-  selectedSyncPolicies,
   onToggleSyncStatus,
   onToggleHealthStatus,
   onToggleCluster,
   onToggleProject,
-  onToggleManifestType,
-  onToggleSyncPolicy,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -363,26 +422,24 @@ function FilterDrawer({
   selectedHealthStatuses: Set<HealthStatus>
   selectedClusters: Set<string>
   selectedProjects: Set<string>
-  selectedManifestTypes: Set<ManifestType>
-  selectedSyncPolicies: Set<SyncPolicyType>
   onToggleSyncStatus: (s: SyncStatus) => void
   onToggleHealthStatus: (h: HealthStatus) => void
   onToggleCluster: (c: string) => void
   onToggleProject: (p: string) => void
-  onToggleManifestType: (m: ManifestType) => void
-  onToggleSyncPolicy: (sp: SyncPolicyType) => void
 }) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange} swipeDirection="right" modal={false}>
-      <DrawerContent className="sm:max-w-md">
-        <DrawerHeader className="px-6 pt-6">
+      <DrawerContent className="sm:max-w-md border-border">
+        <DrawerHeader className="px-6 py-0 h-14 flex-row items-center justify-between border-b border-border">
           <DrawerTitle>Filters</DrawerTitle>
-          <DrawerDescription>
-            Narrow down deployments by status, cluster, project, and more.
-          </DrawerDescription>
+          {activeFilterCount > 0 && (
+            <Button variant="outline" size="sm" onClick={onClearAll}>
+              Clear ({activeFilterCount})
+            </Button>
+          )}
         </DrawerHeader>
 
-        <div className="flex flex-col gap-3 px-6 pb-6 flex-1 overflow-y-auto">
+        <div className="flex flex-col gap-3 px-6 py-3 flex-1 overflow-y-auto">
           <FilterGroup label="Sync Status">
             {syncStatuses.map((s) => (
               <FilterCheckbox
@@ -433,48 +490,7 @@ function FilterDrawer({
             ))}
           </FilterGroup>
 
-          <div className="h-px bg-border" />
-
-          <FilterGroup label="Manifest Type">
-            {manifestTypes.map((m) => (
-              <FilterCheckbox
-                key={m}
-                label={m}
-                checked={selectedManifestTypes.has(m)}
-                onToggle={() => onToggleManifestType(m)}
-              />
-            ))}
-          </FilterGroup>
-
-          <div className="h-px bg-border" />
-
-          <FilterGroup label="Sync Policy">
-            {syncPolicyTypes.map((sp) => (
-              <FilterCheckbox
-                key={sp}
-                label={sp}
-                checked={selectedSyncPolicies.has(sp)}
-                onToggle={() => onToggleSyncPolicy(sp)}
-              />
-            ))}
-          </FilterGroup>
         </div>
-
-        <DrawerFooter className="flex-row items-center justify-between px-6 pb-6">
-          <span className="text-xs text-muted-foreground">
-            {activeFilterCount > 0
-              ? `${activeFilterCount} filter${activeFilterCount > 1 ? "s" : ""} active`
-              : "No filters active"}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onClearAll}
-            disabled={activeFilterCount === 0}
-          >
-            Clear all
-          </Button>
-        </DrawerFooter>
       </DrawerContent>
     </Drawer>
   )
@@ -497,15 +513,15 @@ function SortDrawer({
 }) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange} swipeDirection="right" modal={false}>
-      <DrawerContent className="sm:max-w-sm">
-        <DrawerHeader className="px-6 pt-6">
+      <DrawerContent className="sm:max-w-sm border-border">
+        <DrawerHeader className="px-6 py-0 h-14 flex-row items-center justify-between border-b border-border">
           <DrawerTitle>Sort</DrawerTitle>
-          <DrawerDescription>
-            Choose how deployments are ordered.
-          </DrawerDescription>
+          <Button variant="outline" size="sm" onClick={() => { onSortFieldChange("name"); onSortDirectionChange("asc") }}>
+            Reset
+          </Button>
         </DrawerHeader>
 
-        <div className="flex flex-col gap-4 px-6 pb-6 flex-1 overflow-y-auto">
+        <div className="flex flex-col gap-4 px-6 py-3 flex-1 overflow-y-auto">
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground px-2 pb-1">Sort by</span>
             {(Object.keys(sortFieldLabels) as SortField[]).map((field) => (

@@ -15,8 +15,6 @@ import {
   DrawerContent,
   DrawerHeader,
   DrawerTitle,
-  DrawerDescription,
-  DrawerFooter,
 } from "@repo/ui/drawer"
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/tabs"
 import { ClusterCard } from "@/components/cluster-card"
@@ -43,6 +41,7 @@ import {
   ArrowUpIcon,
   ArrowDownIcon,
   CheckIcon,
+  PlusIcon,
 } from "lucide-react"
 
 export type ClusterSortField = "name" | "status" | "region" | "nodeCount" | "lastSeen"
@@ -145,9 +144,17 @@ export function ClusterView() {
   const currentPage = Math.min(page, totalPages - 1)
   const paged = filtered.slice(currentPage * pageSize, currentPage * pageSize + pageSize)
 
+  const quickStatusFilters: ClusterStatus[] = ["Connected", "Error"]
+
+  const statusCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const c of mockClusters) counts[c.status] = (counts[c.status] ?? 0) + 1
+    return counts
+  }, [])
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 rounded-xl p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="relative flex-1 max-w-md">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
@@ -166,7 +173,25 @@ export function ClusterView() {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <Button size="sm">
+          <PlusIcon className="size-4" />
+          New Cluster
+        </Button>
+      </div>
+
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          {quickStatusFilters.map((s) => (
+            <QuickFilterChip
+              key={s}
+              label={s}
+              count={statusCounts[s] ?? 0}
+              color={s === "Connected" ? "green" : "red"}
+              active={selectedStatuses.has(s)}
+              onClick={() => toggleFilter(selectedStatuses, s, setSelectedStatuses)}
+            />
+          ))}
+
           <Button variant="outline" size="sm" onClick={() => setFilterOpen(true)}>
             <FilterIcon className="size-4" />
             Filters
@@ -182,29 +207,29 @@ export function ClusterView() {
             Sort
           </Button>
 
-          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ClusterViewMode)}>
-            <TabsList>
-              <TabsTrigger value="card">
-                <LayoutGridIcon className="size-4" />
-                <span className="hidden sm:inline">Grid</span>
-              </TabsTrigger>
-              <TabsTrigger value="list">
-                <ListIcon className="size-4" />
-                <span className="hidden sm:inline">List</span>
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          {activeFilterCount > 0 && (
+            <button
+              onClick={clearAllFilters}
+              className="text-xs text-muted-foreground hover:text-foreground hover:underline transition-colors"
+            >
+              Clear all
+            </button>
+          )}
         </div>
-      </div>
 
-      {activeFilterCount > 0 && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active</span>
-          <button onClick={clearAllFilters} className="text-foreground hover:underline">
-            Clear all
-          </button>
-        </div>
-      )}
+        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ClusterViewMode)}>
+          <TabsList>
+            <TabsTrigger value="card">
+              <LayoutGridIcon className="size-4" />
+              <span className="hidden sm:inline">Grid</span>
+            </TabsTrigger>
+            <TabsTrigger value="list">
+              <ListIcon className="size-4" />
+              <span className="hidden sm:inline">List</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
 
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 rounded-xl bg-card gap-2">
@@ -264,6 +289,45 @@ export function ClusterView() {
   )
 }
 
+const quickFilterUnselected: Record<string, string> = {
+  green: "bg-green-500/10 text-green-700 dark:text-green-400 border-transparent hover:bg-green-500/20",
+  red: "bg-red-500/10 text-red-700 dark:text-red-400 border-transparent hover:bg-red-500/20",
+}
+
+const quickFilterSelected: Record<string, string> = {
+  green: "bg-green-500 text-white border-green-500",
+  red: "bg-red-500 text-white border-red-500",
+}
+
+function QuickFilterChip({
+  label,
+  count,
+  color,
+  active,
+  onClick,
+}: {
+  label: string
+  count: number
+  color: string
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        "inline-flex h-8 items-center gap-1.5 rounded-4xl px-3 py-1 text-sm font-medium transition-colors border " +
+        (active
+          ? quickFilterSelected[color] ?? quickFilterSelected.green
+          : "font-light " + (quickFilterUnselected[color] ?? quickFilterUnselected.green))
+      }
+    >
+      <span>{count}</span>
+      <span>{label}</span>
+    </button>
+  )
+}
+
 function FilterCheckbox({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: () => void }) {
   return (
     <button
@@ -311,15 +375,17 @@ function ClusterFilterDrawer({
 }) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange} swipeDirection="right" modal={false}>
-      <DrawerContent className="sm:max-w-md">
-        <DrawerHeader className="px-6 pt-6">
+      <DrawerContent className="sm:max-w-md border-border">
+        <DrawerHeader className="px-6 py-0 h-14 flex-row items-center justify-between border-b border-border">
           <DrawerTitle>Filters</DrawerTitle>
-          <DrawerDescription>
-            Narrow down clusters by status and provider.
-          </DrawerDescription>
+          {activeFilterCount > 0 && (
+            <Button variant="outline" size="sm" onClick={onClearAll}>
+              Clear ({activeFilterCount})
+            </Button>
+          )}
         </DrawerHeader>
 
-        <div className="flex flex-col gap-3 px-6 pb-6 flex-1 overflow-y-auto">
+        <div className="flex flex-col gap-3 px-6 py-3 flex-1 overflow-y-auto">
           <FilterGroup label="Status">
             {clusterStatuses.map((s) => (
               <FilterCheckbox
@@ -344,17 +410,6 @@ function ClusterFilterDrawer({
             ))}
           </FilterGroup>
         </div>
-
-        <DrawerFooter className="flex-row items-center justify-between px-6 pb-6">
-          <span className="text-xs text-muted-foreground">
-            {activeFilterCount > 0
-              ? `${activeFilterCount} filter${activeFilterCount > 1 ? "s" : ""} active`
-              : "No filters active"}
-          </span>
-          <Button variant="outline" size="sm" onClick={onClearAll} disabled={activeFilterCount === 0}>
-            Clear all
-          </Button>
-        </DrawerFooter>
       </DrawerContent>
     </Drawer>
   )
@@ -377,15 +432,15 @@ function ClusterSortDrawer({
 }) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange} swipeDirection="right" modal={false}>
-      <DrawerContent className="sm:max-w-sm">
-        <DrawerHeader className="px-6 pt-6">
+      <DrawerContent className="sm:max-w-sm border-border">
+        <DrawerHeader className="px-6 py-0 h-14 flex-row items-center justify-between border-b border-border">
           <DrawerTitle>Sort</DrawerTitle>
-          <DrawerDescription>
-            Choose how clusters are ordered.
-          </DrawerDescription>
+          <Button variant="outline" size="sm" onClick={() => { onSortFieldChange("name"); onSortDirectionChange("asc") }}>
+            Reset
+          </Button>
         </DrawerHeader>
 
-        <div className="flex flex-col gap-4 px-6 pb-6 flex-1 overflow-y-auto">
+        <div className="flex flex-col gap-4 px-6 py-3 flex-1 overflow-y-auto">
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground px-2 pb-1">Sort by</span>
             {(Object.keys(sortFieldLabels) as ClusterSortField[]).map((field) => (
